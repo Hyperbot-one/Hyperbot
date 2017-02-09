@@ -1,7 +1,8 @@
 const Discord = require("discord.js");
+const config = require("./config.json");
 var fs = require('fs');
 var bot = new Discord.Client();
-var token = "Mjc4Njc1MDkzNTgyOTA1MzQ2.C3vx8w.jpu_70aglJi3J3oLH7JCSx7Gv3g";
+var token = config.token;
 //-------------SPAM----------------------------------------------------------------------
 var spam = new Map([
 	["cancer", "calebSHUTTLE HERE COMES :busstop: THE SHUTTLE FeelsGoodMan"],
