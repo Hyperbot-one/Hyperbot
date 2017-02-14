@@ -17,12 +17,37 @@ var spamRoles;
 
 //-------------COMMANDS -----------------------------------------------------------------
 var commands = new Map([
+	["ForHonor", {process:
+		function(bot,msg){
+			msg.channel.sendMessage("Hey so I know everyone's super excited for the launch of For Honor and as a thank you to everyone for being such an amazing group of people, and to celebrate THC's first time playing in a tournament as a team, I'm going to be holding a giveaway for one copy of For Honor. To enter the give away type the command `!giveaway` to be added to the draw which I will hold first thing when kdubs wakes up tomorrow morning/afternoon");
+	}}],
+	["giveaway", {process:
+		function(bot,msg){
+			let userName = msg.author.username;
+			add2GiveAway(userName);
+			if(searchGiveAway(userName, getJSON('./giveaway.json')) != -1){
+				msg.reply("You've been added to the For Honor giveway, good luck moon2GOOD");
+			} else {
+				msg.reply("There was an error adding you to the giveaway, please try again or contact kdubious");
+			}					
+	}}],
+	["giveawayDraw", {process:
+		function(bot,msg){
+			if(msg.author.username == "kdubious"){
+				draw = getJSON('./giveaway.json');
+				winner = randomIntBtw(0,draw.length);
+				msg.channel.sendMessage("Congrats " + bot.users.find('username', draw[winner]) + " you've won a copy of For Honor, have fun being a medevil badass and happy Valentines Day moon2HEART moon2HEART moon2HEART");
+			} else {
+				msg.channel.sendMessage("you do not have permision to enter this command.");
+			}
+	}}],
 	["spamList", {process:
 		function(bot,msg,spam){
 			let spamList = "";
 			for(let txt of Object.keys(spam.txt)){
 				spamList = spamList + "!" + txt + "\n";
 			}
+			spamList = spamList + "!acc (custom input)\n";
 			msg.channel.sendMessage("```"+spamList+"```")
 	}}],
 	["cheerList",{process:
@@ -40,7 +65,7 @@ var commands = new Map([
 	["acc",{process:
 		function(bot, msg, spam){
 			let x = msg.content.slice(1).split(" ").slice(1).join(" ");
-			msg.channel.sendMessage("Im AcceptableLosses and " + x);
+			msg.channel.sendMessage("I'm AcceptableLosses and " + x);
 	}}],
 	["cheerAdd",{process:
 		function(bot,msg,spam,approvedRoles){
@@ -91,6 +116,60 @@ var commands = new Map([
 					console.log(msg.author.username + " has removed " + cheerName);
 				} else {
 					msg.channel.sendMessage(cheerName + "was not removed from the list, try again or contact kdubious");
+				}
+			}else{
+				msg.channel.sendMessage("Sorry you dont have permision to use this command");
+			}
+	}}],
+	["commandAdd",{process:
+		function(bot,msg,spam,approvedRoles){
+			let txt = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			let txtName = txt[0];
+			let txtContent = txt[1];
+			let approved = false;
+			for(let role of approvedRoles){
+				if(role.members.has(msg.author.id)){
+					approved = true;
+				}
+			}
+			if(approved){
+				if(searchTxt(txtName,getJSON('./spam.json'))){
+					msg.channel.sendMessage("a command with this name already exists");
+					return;
+				}
+				spam.txt[txtName] = txtContent;
+				writeSpam(spam.cheers, spam.txt);
+				if(searchTxt(txtName,getJSON('./spam.json'))){
+					msg.channel.sendMessage("your command has successfully been added to the list");
+					console.log(msg.author.username + " has added command- "+ txt[0] +" : "+ txt[1]);
+				} else {
+					msg.channel.sendMessage("your command has not been added to the list, make sure you are correctly formating the command ex. `!commandAdd name|content`");
+				}
+			}else{
+				msg.channel.sendMessage("Sorry you dont have permision to use this command");
+			}
+	}}],
+	["commandRemove", {process: 
+		function(bot,msg,spam,approvedRoles){
+			let txtName = msg.content.slice(1).split(" ").slice(1);
+			let approved = false;
+			for(let role of approvedRoles){
+				if(role.members.has(msg.author.id)){
+					approved = true;
+				}
+			}
+			if(approved){
+				if(!searchTxt(txtName,getJSON('./spam.json'))){
+					msg.channel.sendMessage(txtName + " is not a listed command");
+					return;
+				}
+				delete spam.txt[txtName];
+				writeSpam(spam.cheers, spam.txt);
+				if(!searchTxt(txtName,getJSON('./spam.json'))){
+					msg.channel.sendMessage(txtName +" has been deleted");
+					console.log(msg.author.username + " has removed " + txtName);
+				} else {
+					msg.channel.sendMessage(txtName + "was not removed from the list, try again or contact kdubious");
 				}
 			}else{
 				msg.channel.sendMessage("Sorry you dont have permision to use this command");
@@ -182,7 +261,13 @@ var commands = new Map([
 					commandList = commandList + "!" + key + " cheerName|cheer\n";
 				} else if(key == "cheerRemove"){
 					commandList = commandList + "!" + key + " cheerName\n";
-				} else {
+				} else if(key == "commandAdd"){
+					commandList = commandList + "!" + key + " commandName|content\n";
+				} else if(key == "commandRemove"){
+					commandList = commandList + "!" + key + " commandName\n";
+				} else if(key == "acc" || key == "giveaway" || key == "ForHonor" || key == "giveawayDraw"){
+					continue;
+				} else{
 					commandList = commandList + "!" + key + "\n";
 				}
 			}
@@ -202,7 +287,6 @@ function writeSpam(cheersMap, txtMap){
 
 function searchCheers(key,spam){
 	for(let cheer of Object.keys(spam.cheers)){
-		console.log("test");
 		if(cheer == key){
 			return true;
 		}
@@ -219,6 +303,22 @@ function searchTxt(key,spam){
 	}
 	return false;
 }
+
+function add2GiveAway(userName){
+	var giveaway = getJSON('./giveaway.json');
+	if(searchGiveAway(userName, giveaway) == -1){
+		giveaway.push(userName);
+		fs.writeFileSync('./giveaway.json', JSON.stringify(giveaway));
+	}
+}
+
+function searchGiveAway(userName, giveaway){
+	for(var i = 0; i < giveaway.length; i++){
+		if(giveaway[i] == userName) return i;
+	}
+	return -1;	
+}
+
 
 //adds a user to the blacklist array and saves to blacklist.json
 function add2BL(userID){
@@ -331,7 +431,7 @@ bot.on("message", msg => {
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam);
 		}else if(cmd == "cheeradd"){
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,cheerAddRoles);
-		}else if(cmd == "cheerremove"){
+		}else if(cmd == "cheerremove" || cmd == "commandremove" || cmd == "commandadd"){
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,cheerRemoveRoles);
 		}else{
 			commands.get(cmdKeys.get(cmd)).process(bot,msg);
@@ -344,7 +444,7 @@ bot.on("message", msg => {
 });
 
 bot.on('guildMemberAdd',user =>{
-	var thc = bot.servers.get('273241020077047810');
+	var thc = bot.guilds.get('154419834728218625');
     if(user.guild == thc){
 		bot.channels.get('278395091641565196').sendMessage(user.user.username + " has joined the server");
 	}
