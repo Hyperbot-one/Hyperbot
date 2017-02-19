@@ -9,29 +9,31 @@
 
 const Discord = require("discord.js");
 const config = require("./config.json");
+const hidCmds = require("./hiddenCmds");
 var fs = require('fs');
 var bot = new Discord.Client();
 var token = config.token;
 var cheerRoles;
 var spamRoles;
+var roll20Cooldown;
 
 //-------------COMMANDS -----------------------------------------------------------------
 var commands = new Map([
-	["ForHonor", {process:
+	["DnD", {process:
 		function(bot,msg){
-			msg.channel.sendMessage("Hey so I know everyone's super excited for the launch of For Honor and as a thank you to everyone for being such an amazing group of people, and to celebrate THC's first time playing in a tournament as a team, I'm going to be holding a giveaway for one copy of For Honor. To enter the give away type the command `!giveaway` to be added to the draw which I will hold first thing when kdubs wakes up tomorrow morning/afternoon");
+			msg.channel.sendMessage("moon2WOO we're going to start a DnD campaign! Juk has been kind enough to sacrifice his time to get one set up and dm for us, If you want to be added to the list of potential players type `!IWantToPlayDnD` and when the time comes to get the party set up there will be a draw to see who gets to play, from there we can schedule a time that works for everyone. More info to come soon!");				
 	}}],
-	["giveaway", {process:
+	["IWantToPlayDnD", {process:
 		function(bot,msg){
 			let userName = msg.author.username;
 			add2GiveAway(userName);
 			if(searchGiveAway(userName, getJSON('./giveaway.json')) != -1){
-				msg.reply("You've been added to the For Honor giveway, good luck moon2GOOD");
+				msg.reply("You've been added to the shortlist for the THC DND campaign");
 			} else {
-				msg.reply("There was an error adding you to the giveaway, please try again or contact kdubious");
+				msg.reply("There was an error adding you to the dnd list, please try again or contact kdubious");
 			}					
 	}}],
-	["giveawayDraw", {process:
+	["DnDDraw", {process:
 		function(bot,msg){
 			if(msg.author.username == "kdubious"){
 				draw = getJSON('./giveaway.json');
@@ -48,6 +50,7 @@ var commands = new Map([
 				spamList = spamList + "!" + txt + "\n";
 			}
 			spamList = spamList + "!acc (custom input)\n";
+			spamList = spamList + "!juk (custom input)\n";
 			msg.channel.sendMessage("```"+spamList+"```")
 	}}],
 	["cheerList",{process:
@@ -66,6 +69,11 @@ var commands = new Map([
 		function(bot, msg, spam){
 			let x = msg.content.slice(1).split(" ").slice(1).join(" ");
 			msg.channel.sendMessage("I'm AcceptableLosses and " + x);
+	}}],
+	["juk",{process:
+		function(bot, msg, spam){
+			let x = msg.content.slice(1).split(" ").slice(1).join(" ");
+			msg.channel.sendMessage("I go "+x+" now chat ill be in and out....... .tv/jukuren201 if anyone is interested :thinking:");
 	}}],
 	["cheerAdd",{process:
 		function(bot,msg,spam,approvedRoles){
@@ -177,17 +185,132 @@ var commands = new Map([
 	}}],
 	["roll20", {process:
 		function(bot,msg){
-			let i = randomIntBtw(1,21);
-			if(i == 20){
-				msg.channel.sendMessage(msg.author + " PogChamp you rolled " + i + "! Watch out we have a bad ass over here BadAss https://www.youtube.com/watch?v=6RJgpPyadeM");
-			} else if(i < 20 && i >= 15){
-				msg.channel.sendMessage(msg.author + " you rolled " + i + " moon2OOO Not too bad! https://media.makeameme.org/created/well-done-you-htk6a4.jpg");
-			} else if(i < 15 && i > 5){
-				msg.channel.sendMessage(msg.author + " you rolled " + i + ", congrats you're mediocre FeelsBadMan");
-			} else if(i <= 5 && i > 1){
-				msg.channel.sendMessage(msg.author + " you rolled " + i + ", at least you tried FailFish https://s-media-cache-ak0.pinimg.com/736x/a7/92/e7/a792e77615f449b39f173fc0c165ada5.jpg");
+			var cooldown = Math.round(new Date() / 1000) - lastRoll;
+			if(cooldown >= 10){
+				let leaderboard = getJSON('./roll20.json');
+				var userIndex = searchLeaderboard(msg.author.username,leaderboard);
+				console.log(userIndex);
+				
+				//returns index of user if found, -1 if not
+				if( userIndex == -1){
+					userIndex = leaderboard.push({"user":msg.author.username, "twenty":0, "high":0, "med":0, "low":0, "one":0}) - 1;
+				}
+				let i = randomIntBtw(1,21);
+				if(i == 20){
+					msg.channel.sendMessage(msg.author + " PogChamp you rolled " + i + "! Watch out we have a bad ass over here BadAss https://www.youtube.com/watch?v=6RJgpPyadeM");
+					leaderboard[userIndex].twenty ++;
+				} else if(i < 20 && i >= 15){
+					msg.channel.sendMessage(msg.author + " you rolled " + i + " moon2OOO Not too bad! https://media.makeameme.org/created/well-done-you-htk6a4.jpg");
+					leaderboard[userIndex].high ++;
+				} else if(i < 15 && i > 5){
+					msg.channel.sendMessage(msg.author + " you rolled " + i + ", congrats you're mediocre FeelsBadMan");
+					leaderboard[userIndex].med ++;
+				} else if(i <= 5 && i > 1){
+					msg.channel.sendMessage(msg.author + " you rolled " + i + ", at least you tried FailFish https://s-media-cache-ak0.pinimg.com/736x/a7/92/e7/a792e77615f449b39f173fc0c165ada5.jpg");
+					leaderboard[userIndex].low ++;
+				} else {
+					msg.channel.sendMessage(msg.author + " you rolled " + i + "! LOLguy git gud scrub https://www.youtube.com/watch?v=2-CnmVVHIzU");
+					leaderboard[userIndex].one ++;
+				}
+				
+				var json = JSON.stringify(leaderboard);
+				fs.writeFileSync('./roll20.json', json);
+				lastRoll = Math.round(new Date() / 1000);
 			} else {
-				msg.channel.sendMessage(msg.author + " you rolled " + i + "! LOLguy git gud scrub https://www.youtube.com/watch?v=2-CnmVVHIzU");
+				msg.reply("please wait " + (10 - cooldown) + " seconds to roll again");
+			}
+	}}],
+	["leaderboard", {process:
+		function(bot,msg){
+			let mod = msg.content.slice(1).split(" ")[1];
+			let leaderboard = getJSON('./roll20.json');
+			if(mod == "20"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return b.twenty - a.twenty;});
+				var str = "__**ROLL 20 LEADERBOARD: MOST 20 ROLLS**__\n\n";
+				for(user of leaderboardSort){
+					str = str + "__**" + user.user + "**__:\n	 **20's: " + user.twenty + "** | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n";
+				}
+				msg.channel.sendMessage(str);
+			}else if(mod == "high"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return b.high - a.high;});
+				var str = "__**ROLL 20 LEADERBOARD: MOST HIGH ROLLS**__\n\n";
+				for(user of leaderboardSort){
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | **high rolls: " + user.high + "** | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n";
+				}
+				msg.channel.sendMessage(str);
+			}else if(mod == "med"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return b.med - a.med;});
+				var str = "__**ROLL 20 LEADERBOARD: MOST MEDIUM ROLLS**__\n\n";
+				for(user of leaderboardSort){
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | **medium rolls: " + user.med + "** | low rolls: " + user.low + " | ones: " + user.one +"\n\n";
+				}
+				msg.channel.sendMessage(str);				
+			}else if(mod == "low"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return b.low - a.low;});
+				var str = "__**ROLL 20 LEADERBOARD: MOST LOW ROLLS**__\n\n";
+				for(user of leaderboardSort){
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | **low rolls: " + user.low + "** | ones: " + user.one +"\n\n";
+				}
+				msg.channel.sendMessage(str);				
+			}else if(mod == "1"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return b.one - a.one;});
+				var str = "__**ROLL 20 LEADERBOARD: MOST ONE ROLLS**__\n\n";
+				for(user of leaderboardSort){
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | **ones: " + user.one +"**\n\n";
+				}
+				msg.channel.sendMessage(str);					
+			}else if(mod == "20%"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return (b.twenty / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.twenty / (a.twenty + a.high + a.med + a.low + a.one)*100);});
+				var str = "__**ROLL 20 LEADERBOARD: TOP 20 ROLL PERCENTAGES**__\n\n";
+				for(user of leaderboardSort){
+					var total = user.twenty + user.high + user.med + user.low + user.one;
+					str = str + "__**" + user.user + "**__:\n	 **20's: " + Math.round((user.twenty/total*100)*100)/100 + "%** | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+				}
+				msg.channel.sendMessage(str);
+			}else if(mod == "high%"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return (b.high / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.high / (a.twenty + a.high + a.med + a.low + a.one)*100);});
+				var str = "__**ROLL 20 LEADERBOARD: TOP HIGH ROLL PERCENTAGES**__\n\n";
+				for(user of leaderboardSort){
+					var total = user.twenty + user.high + user.med + user.low + user.one;
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | **high rolls: " + Math.round((user.high/total*100)*100)/100 + "%** | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+				}
+				msg.channel.sendMessage(str);
+			}else if(mod == "med%"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return (b.med / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.med / (a.twenty + a.high + a.med + a.low + a.one)*100);});
+				var str = "__**ROLL 20 LEADERBOARD: TOP MEDIUM ROLL PERCENTAGES**__\n\n";
+				for(user of leaderboardSort){
+					var total = user.twenty + user.high + user.med + user.low + user.one;
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | **medium rolls: " + Math.round((user.med/total*100)*100)/100 + "%** | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+				}
+				msg.channel.sendMessage(str);
+			}else if(mod == "low%"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return (b.low / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.low / (a.twenty + a.high + a.med + a.low + a.one)*100);});
+				var str = "__**ROLL 20 LEADERBOARD: TOP LOW ROLL PERCENTAGES**__\n\n";
+				for(user of leaderboardSort){
+					var total = user.twenty + user.high + user.med + user.low + user.one;
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | **low rolls: " + Math.round((user.low/total*100)*100)/100 + "%** | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+				}
+				msg.channel.sendMessage(str);
+			}else if(mod == "1%"){
+				var leaderboardSort = leaderboard.slice(0);
+				leaderboardSort.sort(function(a,b){return (b.one / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.one / (a.twenty + a.high + a.med + a.low + a.one)*100);});
+				var str = "__**ROLL 20 LEADERBOARD: TOP ONE ROLL PERCENTAGES**__\n\n";
+				for(user of leaderboardSort){
+					var total = user.twenty + user.high + user.med + user.low + user.one;
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | **ones: " + Math.round((user.one/total*100)*100)/100 +"%**\n\n";
+				}
+				msg.channel.sendMessage(str);
+			} else {
+				msg.channel.sendMessage("please select they type of leaderboard you wish to view `!leaderboard (20/high/med/low/1)` or `!leaderboard (20%/high%/med%/low%/1%)`");
 			}
 	}}],
 	["avatar", {process:
@@ -265,7 +388,7 @@ var commands = new Map([
 					commandList = commandList + "!" + key + " commandName|content\n";
 				} else if(key == "commandRemove"){
 					commandList = commandList + "!" + key + " commandName\n";
-				} else if(key == "acc" || key == "giveaway" || key == "ForHonor" || key == "giveawayDraw"){
+				} else if(key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk"){
 					continue;
 				} else{
 					commandList = commandList + "!" + key + "\n";
@@ -302,6 +425,14 @@ function searchTxt(key,spam){
 		}
 	}
 	return false;
+}
+
+function searchLeaderboard(username,leaderboard){
+	for(let user of leaderboard){
+		console.log(username + " == " + user.user);
+		if(username == user.user) return leaderboard.indexOf(user);
+	}
+	return -1;
 }
 
 function add2GiveAway(userName){
@@ -415,6 +546,7 @@ bot.on("message", msg => {
 		}
 	}*/
 	var spam = getJSON('./spam.json');
+	var hiddenCmds = getJSON('./hidden.json');
 	
 	var cmdKeys = getLowerCaseKeyMap(commands, true);
 	var cheerKeys = getLowerCaseKeyMap(spam.cheers, false);
@@ -440,6 +572,9 @@ bot.on("message", msg => {
 		msg.channel.sendMessage(spam.cheers[cheerKeys.get(cheer)]);
 	}else if(txtKeys.has(cmd)){
 		msg.channel.sendMessage(spam.txt[txtKeys.get(cmd)]);
+	}else if(hiddenCmds.hasOwnProperty(command)){
+		msg.channel.sendMessage(hiddenCmds[command]);
+		hidCmds.command(command);
 	}
 });
 
@@ -466,6 +601,7 @@ bot.on('ready', () => {
 		thc.roles.get('278394315770822656'),	//Tech Help
 		thc.roles.get('278387425850556417'),	//HyperCat Coach
 	];
+	lastRoll = Math.round(new Date() / 1000);
 });
 //--------------------------END EVENTS----------------------------------------------------------------------------
 bot.login(token);
