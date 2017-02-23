@@ -1,10 +1,11 @@
 
 /*TODO:
 	- !kao banned
-	- !jake/smurg
-	- !roll20 leaderboard
-	- cooldown timer
-	- add/remove txt commands
+	- !quote / !addquote
+	- !cj random pepes
+	- rickroll on 20's
+	- counter for rec emote fuckups, shun spelling kdubs wrong etc.
+	...
 */
 
 const Discord = require("discord.js");
@@ -37,8 +38,22 @@ var commands = new Map([
 		function(bot,msg){
 			if(msg.author.username == "kdubious"){
 				draw = getJSON('./giveaway.json');
-				winner = randomIntBtw(0,draw.length);
-				msg.channel.sendMessage("Congrats " + bot.users.find('username', draw[winner]) + " you've won a copy of For Honor, have fun being a medevil badass and happy Valentines Day moon2HEART moon2HEART moon2HEART");
+				winners = [];
+				for(var i = 0; i < 6; i++){
+					var x = randomIntBtw(0,draw.length);
+					winners.push(draw[x]);
+					draw.splice(x,1);
+				}
+				str = "The party members for the first THC DnD group are: ";
+				for(var i = 0; i < winners.length; i++){
+					if(i != 5){
+						str = str + winners[i] + ", ";
+					}else{
+						str = str + " and " + winners[i];
+					}
+				}
+				msg.channel.sendMessage(str);
+				console.log(draw);
 			} else {
 				msg.channel.sendMessage("you do not have permision to enter this command.");
 			}
@@ -189,8 +204,7 @@ var commands = new Map([
 			if(cooldown >= 10){
 				let leaderboard = getJSON('./roll20.json');
 				var userIndex = searchLeaderboard(msg.author.username,leaderboard);
-				console.log(userIndex);
-				
+								
 				//returns index of user if found, -1 if not
 				if( userIndex == -1){
 					userIndex = leaderboard.push({"user":msg.author.username, "twenty":0, "high":0, "med":0, "low":0, "one":0}) - 1;
@@ -224,93 +238,107 @@ var commands = new Map([
 		function(bot,msg){
 			let mod = msg.content.slice(1).split(" ")[1];
 			let leaderboard = getJSON('./roll20.json');
+			var str = "";
 			if(mod == "20"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return b.twenty - a.twenty;});
-				var str = "__**ROLL 20 LEADERBOARD: MOST 20 ROLLS**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: MOST 20 ROLLS**__\n\n";
 				for(user of leaderboardSort){
-					str = str + "__**" + user.user + "**__:\n	 **20's: " + user.twenty + "** | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n";
+					str = str + "__**" + user.user + "**__:\n	 **20's: " + user.twenty + "** | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);
 			}else if(mod == "high"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return b.high - a.high;});
-				var str = "__**ROLL 20 LEADERBOARD: MOST HIGH ROLLS**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: MOST HIGH ROLLS**__\n\n";
 				for(user of leaderboardSort){
-					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | **high rolls: " + user.high + "** | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | **high rolls: " + user.high + "** | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);
 			}else if(mod == "med"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return b.med - a.med;});
-				var str = "__**ROLL 20 LEADERBOARD: MOST MEDIUM ROLLS**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: MOST MEDIUM ROLLS**__\n\n";
 				for(user of leaderboardSort){
-					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | **medium rolls: " + user.med + "** | low rolls: " + user.low + " | ones: " + user.one +"\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | **medium rolls: " + user.med + "** | low rolls: " + user.low + " | ones: " + user.one +"\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);				
 			}else if(mod == "low"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return b.low - a.low;});
-				var str = "__**ROLL 20 LEADERBOARD: MOST LOW ROLLS**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: MOST LOW ROLLS**__\n\n";
 				for(user of leaderboardSort){
-					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | **low rolls: " + user.low + "** | ones: " + user.one +"\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | **low rolls: " + user.low + "** | ones: " + user.one +"\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);				
 			}else if(mod == "1"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return b.one - a.one;});
-				var str = "__**ROLL 20 LEADERBOARD: MOST ONE ROLLS**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: MOST ONE ROLLS**__\n\n";
 				for(user of leaderboardSort){
-					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | **ones: " + user.one +"**\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | **ones: " + user.one +"**\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);					
 			}else if(mod == "20%"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return (b.twenty / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.twenty / (a.twenty + a.high + a.med + a.low + a.one)*100);});
-				var str = "__**ROLL 20 LEADERBOARD: TOP 20 ROLL PERCENTAGES**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: TOP 20 ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
 					var total = user.twenty + user.high + user.med + user.low + user.one;
-					str = str + "__**" + user.user + "**__:\n	 **20's: " + Math.round((user.twenty/total*100)*100)/100 + "%** | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+					str = str + "__**" + user.user + "**__:\n	 **20's: " + Math.round((user.twenty/total*100)*100)/100 + "%** | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);
 			}else if(mod == "high%"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return (b.high / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.high / (a.twenty + a.high + a.med + a.low + a.one)*100);});
-				var str = "__**ROLL 20 LEADERBOARD: TOP HIGH ROLL PERCENTAGES**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: TOP HIGH ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
 					var total = user.twenty + user.high + user.med + user.low + user.one;
-					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | **high rolls: " + Math.round((user.high/total*100)*100)/100 + "%** | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | **high rolls: " + Math.round((user.high/total*100)*100)/100 + "%** | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);
 			}else if(mod == "med%"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return (b.med / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.med / (a.twenty + a.high + a.med + a.low + a.one)*100);});
-				var str = "__**ROLL 20 LEADERBOARD: TOP MEDIUM ROLL PERCENTAGES**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: TOP MEDIUM ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
 					var total = user.twenty + user.high + user.med + user.low + user.one;
-					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | **medium rolls: " + Math.round((user.med/total*100)*100)/100 + "%** | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | **medium rolls: " + Math.round((user.med/total*100)*100)/100 + "%** | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);
 			}else if(mod == "low%"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return (b.low / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.low / (a.twenty + a.high + a.med + a.low + a.one)*100);});
-				var str = "__**ROLL 20 LEADERBOARD: TOP LOW ROLL PERCENTAGES**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: TOP LOW ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
 					var total = user.twenty + user.high + user.med + user.low + user.one;
-					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | **low rolls: " + Math.round((user.low/total*100)*100)/100 + "%** | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | **low rolls: " + Math.round((user.low/total*100)*100)/100 + "%** | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);
 			}else if(mod == "1%"){
 				var leaderboardSort = leaderboard.slice(0);
 				leaderboardSort.sort(function(a,b){return (b.one / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.one / (a.twenty + a.high + a.med + a.low + a.one)*100);});
-				var str = "__**ROLL 20 LEADERBOARD: TOP ONE ROLL PERCENTAGES**__\n\n";
+				str = "__**ROLL 20 LEADERBOARD: TOP ONE ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
 					var total = user.twenty + user.high + user.med + user.low + user.one;
-					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | **ones: " + Math.round((user.one/total*100)*100)/100 +"%**\n\n";
+					str = str + "__**" + user.user + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | **ones: " + Math.round((user.one/total*100)*100)/100 +"%**\n\n\u0000";
 				}
-				msg.channel.sendMessage(str);
 			} else {
-				msg.channel.sendMessage("please select they type of leaderboard you wish to view `!leaderboard (20/high/med/low/1)` or `!leaderboard (20%/high%/med%/low%/1%)`");
+				str = "please select the type of leaderboard you wish to view `!leaderboard (20/high/med/low/1)` or `!leaderboard (20%/high%/med%/low%/1%)`";
+			}
+			if(str.length >= 2000){
+				var strArr = str.split("\u0000");
+				var strArr2 = [];
+				strArr2[0] = strArr[0];
+				console.log(strArr2);
+				console.log('-------------');
+				console.log(strArr);
+				var x = 0;
+				for(var i = 1; i < strArr.length; i++){
+					if(typeof strArr2[x] === 'undefined'){
+						strArr2[x] = strArr[i];
+					}else if(strArr2[x].length < 1700){
+						strArr2[x] = strArr2[x] + strArr[i];
+					}else{
+						x++;
+					}
+				}
+				for(var i = 0; i < strArr2.length; i++){
+					msg.channel.sendMessage(strArr2[i]);
+				}
+			}else{
+			msg.channel.sendMessage(str);
 			}
 	}}],
 	["avatar", {process:
@@ -360,15 +388,19 @@ var commands = new Map([
 				msg.channel.sendMessage("please type \"!blacklist add\" to be added to the !avatar blacklist, or \"!blacklist remove\" to be removed and allow !avatar commands with your name.");
 			}		
 	}}],
-	["selfDestruct", {process:
+	["smurglord", {process:
 		function(bot, msg){
-			msg.channel.sendMessage("!selfDestruct");
-			setTimeout(() => { msg.channel.sendMessage("!selfDestruct")}, 1000);
-			setTimeout(() => { msg.channel.sendMessage("!selfDestruct")},2000);
-			setTimeout(() => { msg.channel.sendMessage("!selfDestruct")}, 3000);
-			setTimeout(() => { msg.channel.sendMessage("!selfDestruct")}, 4000);
-			setTimeout(() => { msg.channel.sendMessage("***BOOM*** Troll1")}, 5000);
-			setTimeout(() => { msg.channel.sendMessage("testing timing of functions and that the bot can't trigger itself")}, 5500);
+			var cooldown = Math.round(new Date() / 1000) - lastSmurg;
+			if(cooldown >= 600){
+				msg.channel.sendMessage("now summoning the Smurglord...");
+				setTimeout(() => { msg.channel.sendMessage("<@155123023496740865> ***ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn***")}, 1000);
+				setTimeout(() => { msg.channel.sendMessage("<@155123023496740865> ***ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn***")}, 2000);
+				setTimeout(() => { msg.channel.sendMessage("<@155123023496740865> ***ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn***")}, 3000);
+				setTimeout(() => { msg.channel.sendMessage("<@155123023496740865> ***ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn***")}, 4000);
+				lastSmurg = Math.round(new Date() / 1000);
+			} else {
+				msg.reply("the smurglord slumbers try summoning again in " + (600 - cooldown) + " seconds");
+			}
 	}}],
 	["commands", {process:
 		function(bot,msg){
@@ -429,7 +461,6 @@ function searchTxt(key,spam){
 
 function searchLeaderboard(username,leaderboard){
 	for(let user of leaderboard){
-		console.log(username + " == " + user.user);
 		if(username == user.user) return leaderboard.indexOf(user);
 	}
 	return -1;
@@ -602,6 +633,7 @@ bot.on('ready', () => {
 		thc.roles.get('278387425850556417'),	//HyperCat Coach
 	];
 	lastRoll = Math.round(new Date() / 1000);
+	lastSmurg = Math.round(new Date() / 1000);
 });
 //--------------------------END EVENTS----------------------------------------------------------------------------
 bot.login(token);
