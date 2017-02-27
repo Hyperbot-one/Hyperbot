@@ -1,11 +1,11 @@
 
 /*TODO:
 	- !kao banned
-	- !quote / !addquote
+	- add multiple quotes with same auth/date (recursively search auth/date, if found add i to end)
 	- !cj random pepes
 	- rickroll on 20's
-	- counter for rec emote fuckups, shun spelling kdubs wrong etc.
-	...
+	- counter for time since last rec emote fuckup, shun spelling kdubs wrong etc.	
+	... plus others moon2T
 */
 
 const Discord = require("discord.js");
@@ -76,7 +76,7 @@ var commands = new Map([
 			}
 			msg.channel.sendMessage("```"+cheerList+"```")
 	}}],
-	["cheerRandom",{process:
+	["randomCheer",{process:
 		function(bot, msg, spam){
 			msg.channel.sendMessage(spam.cheers[randomCheer(spam.cheers)]);
 	}}],
@@ -90,7 +90,7 @@ var commands = new Map([
 			let x = msg.content.slice(1).split(" ").slice(1).join(" ");
 			msg.channel.sendMessage("I go "+x+" now chat ill be in and out....... .tv/jukuren201 if anyone is interested :thinking:");
 	}}],
-	["cheerAdd",{process:
+	["addCheer",{process:
 		function(bot,msg,spam,approvedRoles){
 			let cheer = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
 			let cheerName = cheer[0];
@@ -112,13 +112,13 @@ var commands = new Map([
 					msg.channel.sendMessage("your cheer has successfully been added to the list");
 					console.log(msg.author.username + " has added cheer- "+ cheer[0] +" : "+ cheer[1]);
 				} else {
-					msg.channel.sendMessage("your cheer has not been added to the list, make sure you are correctly formating the command ex. `!cheerAdd name|cheer`");
+					msg.channel.sendMessage("your cheer has not been added to the list, make sure you are correctly formating the command ex. `!addCheer name|cheer`");
 				}
 			}else{
 				msg.channel.sendMessage("Sorry you dont have permision to use this command");
 			}
 	}}],
-	["cheerRemove", {process: 
+	["removeCheer", {process: 
 		function(bot,msg,spam,approvedRoles){
 			let cheerName = msg.content.slice(1).split(" ").slice(1);
 			let approved = false;
@@ -144,7 +144,7 @@ var commands = new Map([
 				msg.channel.sendMessage("Sorry you dont have permision to use this command");
 			}
 	}}],
-	["commandAdd",{process:
+	["addCommand",{process:
 		function(bot,msg,spam,approvedRoles){
 			let txt = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
 			let txtName = txt[0];
@@ -156,23 +156,23 @@ var commands = new Map([
 				}
 			}
 			if(approved){
-				if(searchTxt(txtName,getJSON('./spam.json'))){
+				if(searchKey(txtName,getJSON('./spam.json'))){
 					msg.channel.sendMessage("a command with this name already exists");
 					return;
 				}
 				spam.txt[txtName] = txtContent;
 				writeSpam(spam.cheers, spam.txt);
-				if(searchTxt(txtName,getJSON('./spam.json'))){
+				if(searchKey(txtName,getJSON('./spam.json'))){
 					msg.channel.sendMessage("your command has successfully been added to the list");
 					console.log(msg.author.username + " has added command- "+ txt[0] +" : "+ txt[1]);
 				} else {
-					msg.channel.sendMessage("your command has not been added to the list, make sure you are correctly formating the command ex. `!commandAdd name|content`");
+					msg.channel.sendMessage("your command has not been added to the list, make sure you are correctly formating the command ex. `!addCommand name|content`");
 				}
 			}else{
 				msg.channel.sendMessage("Sorry you dont have permision to use this command");
 			}
 	}}],
-	["commandRemove", {process: 
+	["removeCommand", {process: 
 		function(bot,msg,spam,approvedRoles){
 			let txtName = msg.content.slice(1).split(" ").slice(1);
 			let approved = false;
@@ -182,18 +182,82 @@ var commands = new Map([
 				}
 			}
 			if(approved){
-				if(!searchTxt(txtName,getJSON('./spam.json'))){
+				if(!searchKey(txtName,getJSON('./spam.json'))){
 					msg.channel.sendMessage(txtName + " is not a listed command");
 					return;
 				}
 				delete spam.txt[txtName];
 				writeSpam(spam.cheers, spam.txt);
-				if(!searchTxt(txtName,getJSON('./spam.json'))){
+				if(!searchKey(txtName,getJSON('./spam.json'))){
 					msg.channel.sendMessage(txtName +" has been deleted");
 					console.log(msg.author.username + " has removed " + txtName);
 				} else {
 					msg.channel.sendMessage(txtName + "was not removed from the list, try again or contact kdubious");
 				}
+			}else{
+				msg.channel.sendMessage("Sorry you dont have permision to use this command");
+			}
+	}}],
+	["quote",{process:
+		function(bot,msg){
+			let quotes = getJSON('./quotes.json');
+			let randQuote = randomCheer(quotes);
+			msg.channel.sendMessage(quotes[randQuote] + "\n    -" + randQuote);
+		
+	}}],
+	["addQuote",{process:
+		function(bot,msg){
+			let quotes = getJSON('./quotes.json');
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			let auth = input[0];
+			let quote = input[1];
+			console.log(auth + " : " + quote);
+			
+			if(searchTxt(quote,getJSON('./quotes.json'))){
+				msg.channel.sendMessage("this quote has already been entered");
+				return;
+			}
+			
+			quotes[auth] = quote;
+			fs.writeFileSync('./quotes.json', JSON.stringify(quotes));
+			
+			if(searchTxt(quote,getJSON('./quotes.json'))){
+				msg.channel.sendMessage("your quote has successfully been added to the list");
+				console.log(msg.author.username + " has added quote- "+ auth +" : "+ quote);
+			} else {
+				msg.channel.sendMessage("your quote has not been added to the list, make sure you are correctly formating the command ex. `!addQuote name date|quote`");
+			}			
+	}}],
+	["removeQuote", {process:
+		function(bot,msg,approvedRoles){
+			let quotes = getJSON('./quotes.json');
+			let quote = msg.content.slice(1).split(" ").slice(1).join(" ")
+			let approved = false;
+			
+			for(let role of approvedRoles){
+				if(role.members.has(msg.author.id)){
+					approved = true;
+				}
+			}
+			if(approved){
+				if(!searchTxt(quote,quotes)){
+					msg.channel.sendMessage("`" + quote + "` is not a listed quote");
+					return;
+				}else{
+					for(var key in quotes){
+						if(quotes[key] == quote){
+							delete quotes[key];
+						}
+					}
+				}
+
+				fs.writeFileSync('./quotes.json', JSON.stringify(quotes));
+				if(!searchTxt(quote,getJSON('./quotes.json'))){
+					msg.channel.sendMessage("your quote has successfully been removed to the list");
+					console.log(msg.author.username + " has removed quote- "+ quote);
+				} else {
+					msg.channel.sendMessage("your quote has not been removed from the list, make sure you are correctly formating the command ex. `!removeQuote quote`");
+			}
 			}else{
 				msg.channel.sendMessage("Sorry you dont have permision to use this command");
 			}
@@ -204,7 +268,7 @@ var commands = new Map([
 			if(cooldown >= 10){
 				let leaderboard = getJSON('./roll20.json');
 				var userIndex = searchLeaderboard(msg.author.username,leaderboard);
-								
+										
 				//returns index of user if found, -1 if not
 				if( userIndex == -1){
 					userIndex = leaderboard.push({"user":msg.author.username, "twenty":0, "high":0, "med":0, "low":0, "one":0}) - 1;
@@ -225,7 +289,8 @@ var commands = new Map([
 				} else {
 					msg.channel.sendMessage(msg.author + " you rolled " + i + "! LOLguy git gud scrub https://www.youtube.com/watch?v=2-CnmVVHIzU");
 					leaderboard[userIndex].one ++;
-				}
+				}		
+			
 				
 				var json = JSON.stringify(leaderboard);
 				fs.writeFileSync('./roll20.json', json);
@@ -321,9 +386,6 @@ var commands = new Map([
 				var strArr = str.split("\u0000");
 				var strArr2 = [];
 				strArr2[0] = strArr[0];
-				console.log(strArr2);
-				console.log('-------------');
-				console.log(strArr);
 				var x = 0;
 				for(var i = 1; i < strArr.length; i++){
 					if(typeof strArr2[x] === 'undefined'){
@@ -402,6 +464,28 @@ var commands = new Map([
 				msg.reply("the smurglord slumbers try summoning again in " + (600 - cooldown) + " seconds");
 			}
 	}}],
+	["farming", {process: 
+		function(bot,msg){
+			let txt = msg.content.slice(1).split(" ").slice(1).join(" ")
+			let colonCount = 0;
+			let emote = '';
+			let str = '';
+			for(c in txt){
+				if(txt[c] == ":"){
+					colonCount++;
+				}else if(colonCount == 1){
+					emote = emote + txt[c];
+				}else if(colonCount >= 2){
+					break;
+				}
+			}
+			if(colonCount == 0) emote = txt;
+			for(let i = 0; i <= 5; i++){
+				str = str + emote + " ";
+			}
+			str = str + ":tractor: KKona:flip";
+			msg.channel.sendMessage(str);
+	}}],
 	["commands", {process:
 		function(bot,msg){
 			let commandList = "";
@@ -412,14 +496,18 @@ var commands = new Map([
 					commandList = commandList + "!" + key + " (username/nickname)\n";
 				} else if(key == "blacklist"){
 					commandList = commandList + "!" + key + " (add/remove)\n";
-				} else if(key == "cheerAdd"){
+				} else if(key == "addCheer"){
 					commandList = commandList + "!" + key + " cheerName|cheer\n";
-				} else if(key == "cheerRemove"){
+				} else if(key == "removeCheer"){
 					commandList = commandList + "!" + key + " cheerName\n";
-				} else if(key == "commandAdd"){
+				} else if(key == "addCommand"){
 					commandList = commandList + "!" + key + " commandName|content\n";
-				} else if(key == "commandRemove"){
+				} else if(key == "removeCommand"){
 					commandList = commandList + "!" + key + " commandName\n";
+				} else if(key == "addQuote"){
+					commandList = commandList + "!" + key + " author date|quote\n";
+				} else if(key == "farming"){
+					commandList = commandList + "!" + key + " (twitch/bd emote)\n";
 				} else if(key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk"){
 					continue;
 				} else{
@@ -449,10 +537,18 @@ function searchCheers(key,spam){
 	return false;
 }
 
-
-function searchTxt(key,spam){
+function searchKey(key,spam){
 	for(let cheer of Object.keys(spam.txt)){
 		if(cheer == key){
+			return true;
+		}
+	}
+	return false;
+}
+
+function searchTxt(input, arr){
+	for(let txt of Object.keys(arr).map(function(key) {return arr[key];} )){
+		if(txt == input){
 			return true;
 		}
 	}
@@ -590,12 +686,14 @@ bot.on("message", msg => {
 	
 	//takes the first word of the message and searches the commands Map, the cheers map, and the txt map, if it is a valid command it will run the coresponding function
 	if (cmdKeys.has(cmd)){
-		if(cmd == "cheerlist" || cmd == "cheerrandom" || cmd == "spamlist"){
+		if(cmd == "cheerlist" || cmd == "randomcheer" || cmd == "spamlist"){
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam);
-		}else if(cmd == "cheeradd"){
+		}else if(cmd == "addcheer"){
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,cheerAddRoles);
-		}else if(cmd == "cheerremove" || cmd == "commandremove" || cmd == "commandadd"){
+		}else if(cmd == "removecheer" || cmd == "removecommand" || cmd == "addcommand"){
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,cheerRemoveRoles);
+		}else if(cmd == "removequote"){
+			commands.get(cmdKeys.get(cmd)).process(bot,msg,cheerRemoveRoles);
 		}else{
 			commands.get(cmdKeys.get(cmd)).process(bot,msg);
 		}
@@ -612,7 +710,7 @@ bot.on("message", msg => {
 bot.on('guildMemberAdd',user =>{
 	var thc = bot.guilds.get('154419834728218625');
     if(user.guild == thc){
-		bot.channels.get('278395091641565196').sendMessage(user.user.username + " has joined the server");
+		bot.channels.get('278395091641565196').sendMessage("@here " + user.user.username + " has joined the server");
 	}
 });
 
