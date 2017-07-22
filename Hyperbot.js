@@ -1,10 +1,24 @@
 
 /*TODO:
-	- !kao banned
-	- add multiple quotes with same auth/date
-	- !remindme
-	- fix farming for thc emotes
-	- !grind
+	- !kao fix invites for infinite time
+	- !kao add nickname storage
+	- !kao more than one kicked at a time
+	
+	-dnd stuff:
+		- !sessionTime (#days)|(list of characters who played seperated by ,) ...adds amount of days to everyone in the dndplayer json aray not listed (Titus only)
+		- !addDownTime (#days)|(character) 									  ...adds time to a character or list of characters (Titus only)
+		- !removeDownTime (#days)|(character) 								  ...removes time from a character or list of characters (Titus only)
+		- !myDownTime 														  ...displays msg.authors amount of downtime
+		- !downtimeList 													  ...displays a list of downtime activities and the cost of gold and time of each
+		- !findItem (name)													  ...displays all information for an item
+		- !listItems (name/rarity/price/type)|(search term/number/#range)     ...lists all items found from a search
+																		         (name: list all items containing a term) (rarity/price: list all items with specific or range of number) (type: list all items of a specific type)
+		- !addItem (name)|(rarity)|(price)|(type)							  ...adds a new item to the list (Titus only)
+		- !removeItem (name)												  ...removes an item from the list (Titus only)
+		- !inventory (itemType)|(#1)|(#2)|(#3)|(#4) 						  ...generates an inventory for the specified shop with the amount of items of each rarity randomly chosen from the list
+	   eg.!inventory accessory|5|3|0-2|0 										 (can indicate a range of possible number of items it chooses)
+		
+		
 	... plus others moon2T
 */
 
@@ -14,14 +28,23 @@ const hidCmds = require("./hiddenCmds");
 const fs = require('fs');
 const request = require('request');
 const cheerio = require('cheerio');
-const Cleverbot = require("cleverbot-node")
+const Cleverbot = require("cleverbot-node");
+
 var bot = new Discord.Client();
 var token = config.token;
 var cbKey = config.cbAPI;
-var cheerRoles;
-var spamRoles;
+
 var roll20Cooldown;
-var cleverbotCounter = 200;
+var lastKickedRoles;
+var cleverbotCounter = 0;
+var gdqStart = new Date(2018,0,7,9,30); //year, month(0-11), day, hour, minute
+var jenniferTime = new Date(2017,7,10,13,24);
+var remindersChannel;
+var remindersMsg;
+var botOnlyChannel;
+var rainbowRoles;
+var annaColours = {count:0, colours:['#AF838D', '#B2394F', '#AEC97E', '#F2B4A2', '#E87171',  '#F4909F']};
+var recColours = {count:0, colours:['#EE82EE', '#DA70D6', '#FF00FF', '#BA55D3', '#9370DB', '#8A2BE2', '#9400D3', '#9932CC', '#8B008B', '#800080', '#4B0082']};
 
 //-------------COMMANDS -----------------------------------------------------------------
 var commands = new Map([
@@ -57,13 +80,8 @@ var commands = new Map([
 			let cheer = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
 			let cheerName = cheer[0];
 			let cheerTxt = cheer[1];
-			let approved = false;
-			for(let role of approvedRoles){
-				if(role.members.has(msg.author.id)){
-					approved = true;
-				}
-			}
-			if(approved){
+
+			if(approvedRole(approvedRoles, msg.author) != false){
 				if(searchCheers(cheerName,getJSON('./spam.json'))){
 					msg.channel.sendMessage("a cheer with this name already exists");
 					return;
@@ -83,13 +101,8 @@ var commands = new Map([
 	["removeCheer", {process: 
 		function(bot,msg,spam,approvedRoles){
 			let cheerName = msg.content.slice(1).split(" ").slice(1);
-			let approved = false;
-			for(let role of approvedRoles){
-				if(role.members.has(msg.author.id)){
-					approved = true;
-				}
-			}
-			if(approved){
+
+			if(approvedRole(approvedRoles, msg.author) != false){
 				if(!searchCheers(cheerName,getJSON('./spam.json'))){
 					msg.channel.sendMessage(cheerName + " is not a listed cheer");
 					return;
@@ -111,13 +124,8 @@ var commands = new Map([
 			let txt = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
 			let txtName = txt[0];
 			let txtContent = txt[1];
-			let approved = false;
-			for(let role of approvedRoles){
-				if(role.members.has(msg.author.id)){
-					approved = true;
-				}
-			}
-			if(approved){
+
+			if(approvedRole(approvedRoles, msg.author) != false){
 				if(searchKey(txtName,getJSON('./spam.json'))){
 					msg.channel.sendMessage("a command with this name already exists");
 					return;
@@ -137,13 +145,8 @@ var commands = new Map([
 	["removeCommand", {process: 
 		function(bot,msg,spam,approvedRoles){
 			let txtName = msg.content.slice(1).split(" ").slice(1);
-			let approved = false;
-			for(let role of approvedRoles){
-				if(role.members.has(msg.author.id)){
-					approved = true;
-				}
-			}
-			if(approved){
+
+			if(approvedRole(approvedRoles, msg.author) != false){
 				if(!searchKey(txtName,getJSON('./spam.json'))){
 					msg.channel.sendMessage(txtName + " is not a listed command");
 					return;
@@ -194,14 +197,8 @@ var commands = new Map([
 		function(bot,msg,approvedRoles){
 			let quotes = getJSON('./quotes.json');
 			let quote = msg.content.slice(1).split(" ").slice(1).join(" ")
-			let approved = false;
-			
-			for(let role of approvedRoles){
-				if(role.members.has(msg.author.id)){
-					approved = true;
-				}
-			}
-			if(approved){
+
+			if(approvedRole(approvedRoles, msg.author) != false){
 				if(!searchTxt(quote,quotes)){
 					msg.channel.sendMessage("`" + quote + "` is not a listed quote");
 					return;
@@ -277,6 +274,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return b.shiny20 - a.shiny20;});
 				str = "__**ROLL 20 LEADERBOARD: MOST SHINY 20 ROLLS**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					if(user.shiny20 > 0){
 						str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 **shiny 20's: " + user.shiny20 + "**\n\n\u0000";
 					}
@@ -286,6 +284,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return b.twenty - a.twenty;});
 				str = "__**ROLL 20 LEADERBOARD: MOST 20 ROLLS**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 **20's: " + user.twenty + "** | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n\u0000";
 				}
 			}else if(mod == "high"){
@@ -293,6 +292,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return b.high - a.high;});
 				str = "__**ROLL 20 LEADERBOARD: MOST HIGH ROLLS**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + user.twenty + " | **high rolls: " + user.high + "** | medium rolls: " + user.med + " | low rolls: " + user.low + " | ones: " + user.one +"\n\n\u0000";
 				}
 			}else if(mod == "med"){
@@ -300,6 +300,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return b.med - a.med;});
 				str = "__**ROLL 20 LEADERBOARD: MOST MEDIUM ROLLS**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | **medium rolls: " + user.med + "** | low rolls: " + user.low + " | ones: " + user.one +"\n\n\u0000";
 				}
 			}else if(mod == "low"){
@@ -307,6 +308,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return b.low - a.low;});
 				str = "__**ROLL 20 LEADERBOARD: MOST LOW ROLLS**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | **low rolls: " + user.low + "** | ones: " + user.one +"\n\n\u0000";
 				}
 			}else if(mod == "1"){
@@ -314,6 +316,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return b.one - a.one;});
 				str = "__**ROLL 20 LEADERBOARD: MOST ONE ROLLS**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + user.twenty + " | high rolls: " + user.high + " | medium rolls: " + user.med + " | low rolls: " + user.low + " | **ones: " + user.one +"**\n\n\u0000";
 				}
 			}else if(mod == "20%"){
@@ -321,6 +324,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return (b.twenty / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.twenty / (a.twenty + a.high + a.med + a.low + a.one)*100);});
 				str = "__**ROLL 20 LEADERBOARD: TOP 20 ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					var total = user.twenty + user.high + user.med + user.low + user.one;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 **20's: " + Math.round((user.twenty/total*100)*100)/100 + "%** | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
@@ -329,6 +333,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return (b.high / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.high / (a.twenty + a.high + a.med + a.low + a.one)*100);});
 				str = "__**ROLL 20 LEADERBOARD: TOP HIGH ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					var total = user.twenty + user.high + user.med + user.low + user.one;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | **high rolls: " + Math.round((user.high/total*100)*100)/100 + "%** | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
@@ -337,6 +342,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return (b.med / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.med / (a.twenty + a.high + a.med + a.low + a.one)*100);});
 				str = "__**ROLL 20 LEADERBOARD: TOP MEDIUM ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					var total = user.twenty + user.high + user.med + user.low + user.one;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | **medium rolls: " + Math.round((user.med/total*100)*100)/100 + "%** | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
@@ -345,6 +351,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return (b.low / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.low / (a.twenty + a.high + a.med + a.low + a.one)*100);});
 				str = "__**ROLL 20 LEADERBOARD: TOP LOW ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					var total = user.twenty + user.high + user.med + user.low + user.one;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | **low rolls: " + Math.round((user.low/total*100)*100)/100 + "%** | ones: " + Math.round((user.one/total*100)*100)/100 +"%\n\n\u0000";
 				}
@@ -353,6 +360,7 @@ var commands = new Map([
 				leaderboardSort.sort(function(a,b){return (b.one / (b.twenty + b.high + b.med + b.low + b.one)*100)-(a.one / (a.twenty + a.high + a.med + a.low + a.one)*100);});
 				str = "__**ROLL 20 LEADERBOARD: TOP ONE ROLL PERCENTAGES**__\n\n";
 				for(user of leaderboardSort){
+					if(bot.users.get(user.user) === undefined) continue;
 					var total = user.twenty + user.high + user.med + user.low + user.one;
 					str = str + "__**" + bot.users.get(user.user).username + "**__:\n	 20's: " + Math.round((user.twenty/total*100)*100)/100 + "% | high rolls: " + Math.round((user.high/total*100)*100)/100 + "% | medium rolls: " + Math.round((user.med/total*100)*100)/100 + "% | low rolls: " + Math.round((user.low/total*100)*100)/100 + "% | **ones: " + Math.round((user.one/total*100)*100)/100 +"%**\n\n\u0000";
 				}
@@ -430,10 +438,10 @@ var commands = new Map([
 	["farming", {process: 
 		function(bot,msg){
 			let txt = msg.content.slice(1).split(" ").slice(1).join(" ")
-			let colonCount = 0;
-			let emote = '';
+			//let colonCount = 0;
+			//let emote = '';
 			let str = '';
-			for(c in txt){
+			/*for(c in txt){
 				if(txt[c] == ":"){
 					colonCount++;
 				}else if(colonCount == 1){
@@ -441,12 +449,19 @@ var commands = new Map([
 				}else if(colonCount >= 2){
 					break;
 				}
-			}
-			if(colonCount == 0) emote = txt;
+			}*/
+			//if(colonCount == 0)
+				emote = txt;
 			for(let i = 0; i <= 5; i++){
 				str = str + emote + " ";
 			}
 			str = str + ":tractor: KKona:flip";
+			msg.channel.sendMessage(str);
+	}}],
+	["xd", {process:
+		function(bot,msg){
+			let emote = msg.content.slice(1).split(" ").slice(1).join(" ");
+			let str = emote + "                              " + emote + "        " + emote + " " + emote + " " + emote + " \n     " + emote + "                    " + emote + "             " + emote + "                    " + emote + " \n          " + emote + "          " + emote + "                  " + emote + "                         " + emote + " \n               " + emote + " " + emote + "                      " + emote + "                         " + emote + " \n               " + emote + " " + emote + "                      " + emote + "                         " + emote + " \n          " + emote + "           " + emote + "                 " + emote + "                         " + emote + " \n     " + emote + "                     " + emote + "            " + emote + "                    " + emote + " \n" + emote + "                               " + emote + "       " + emote + " " + emote + " " + emote;
 			msg.channel.sendMessage(str);
 	}}],
 	["r34", {process:
@@ -519,6 +534,62 @@ var commands = new Map([
 				});
 			}else{msg.channel.sendMessage("wrong channel moon2T");}
 	}}],
+	["remindMe", {process:
+		function(bot,msg){
+			var reminders = getJSON('./reminders.json');
+			var message = msg.content.slice(1).split(" ").slice(1).join(" ").split("|")[1];
+			var times = msg.content.slice(1).split(" ").slice(1).join(" ").split("|")[0].split(" ").filter(Boolean);
+			var remindTime = 0;//in seconds
+			var startTime = Math.round(new Date() / 1000);
+			
+			for(var i = 0; i < times.length; i++){
+				let timeArray = times[i].split(/(\d+)/).filter(Boolean);
+				console.log(timeArray);
+				let time = isNaN(timeArray[0]) ? 0 : timeArray[0];
+				let unit = timeArray[1] === undefined ? 'a' : timeArray[1];
+				console.log("time: " + time + ", unit: "+unit);
+				remindTime += (time * unit2Mills(unit));
+			}	
+			
+			reminders.push({"user":msg.author.id, "start":startTime, "end":remindTime, "msg":message, "channel":msg.channel.id});
+			var json = JSON.stringify(reminders);
+			fs.writeFileSync('./reminders.json', json);
+			if(checkReminderAdded(msg,startTime)){
+				if(remindTime != 0){
+					msg.reply("reminder set for" + secondsToReasonableTime(remindTime));
+				}
+			}else{
+				msg.reply("your reminder was not added, please try again using the command `!remindme (time)|(msg)` for example `!remindme 5minutes|Tell KDubs he's so talented FeelsWowMan`");
+			}
+	}}],
+	["reminders", {process:
+		function(bot,msg){
+			var reminders = getJSON('./reminders.json');
+			var txt = "";
+			for(var i in reminders){
+				var user = bot.users.get(reminders[i].user).username;
+				var start = reminders[i].start;
+				var startDate = new Date();
+				startDate.setMilliseconds(start);
+				var timeLeft = secondsToReasonableTime(reminders[i].end - (Math.round(new Date() / 1000) - start));
+				txt = txt + "**" + user + "** set reminder \"" + reminders[i].msg + "\" with" + timeLeft + " left\n"; 
+			
+			}
+			remindersChannel = msg.channel;
+			botOnlyChannel.send(txt);
+	}}],
+	["GDQCountdown", {process:
+		function(bot,msg){
+			//msg.channel.sendMessage("Now you dumb fucks!");
+			console.log(gdqStart.toDateString());
+			msg.channel.sendMessage("AGDQ starts in" + secondsToReasonableTime((gdqStart.getTime() - (new Date().getTime()))/1000));
+	}}],
+	["FeelsWowMan", {process:
+		function(bot,msg){
+			//msg.channel.sendMessage("Now you dumb fucks!");
+			console.log(jenniferTime.toDateString());
+			msg.channel.sendMessage(secondsToReasonableTime((jenniferTime.getTime() - (new Date().getTime()))/1000) + " until the best moment of my life FeelsWowMan");
+	}}],
 	["commands", {process:
 		function(bot,msg){
 			let commandList = "";
@@ -546,7 +617,9 @@ var commands = new Map([
 					commandList = commandList + "!" + key + " (20%/high%/med%/low%/1%)\n";
 				} else if(key == "farming"){
 					commandList = commandList + "!" + key + " (twitch/bd emote)\n";
-				} else if(key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk" || key == "rec" || key == "shun" || key == "smurglord" || key == "booly" || key == "mcnugget"){
+				} else if(key == "remindMe"){
+					commandList = commandList + "!" + key + " (time)|(message)\n";
+				} else if(key == "serverlist" || key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk" || key == "rec" || key == "shun" || key == "smurglord" || key == "booly" || key == "mcnugget"){
 					continue;
 				} else{
 					commandList = commandList + "!" + key + "\n";
@@ -554,6 +627,40 @@ var commands = new Map([
 			}
 			
 			msg.channel.sendMessage("```"+commandList+"```");
+	}}],
+	["kao",{process: 
+		function(bot,msg,adminRoles){
+			if(approvedRole(adminRoles,msg.author) != false){
+				let misc = getJSON('./misc.json');
+				let user = msg.content.slice(1).split(" ").slice(1).join(" ");
+				let bannedMember = msg.guild.members.find('displayName', user);
+				console.log(bannedMember);
+				if(!bannedMember){
+					do{
+						bannedMember = msg.guild.members.random();
+					}while(approvedRole(adminRoles,bannedMember.user) != false);
+				}
+				let bannedUser = bannedMember.user;
+				
+				misc.lastKickedId = bannedMember.id;
+				lastKickedRoles = bannedMember.roles;
+				console.log("before promise rejection?");
+				
+				msg.channel.sendMessage(bannedMember + "YOU CALL ME A PUSC? I FUK U UP! _BAN_ FeelsReinMan moon2BANNED");
+				msg.guild.defaultChannel.createInvite({maxAge:3600, maxUses:1}).then(invite => {
+					console.log("invite created")
+					let inviteLink = "http://discord.gg/" + invite.code;
+					bannedUser.send("YOU CALL ME A PUSC? I FUK U UP! _BAN_ FeelsReinMan moon2BANNED");
+					bannedUser.send("Im sorry, I love you please come back " + inviteLink);
+					setTimeout(() => { bannedMember.kick()}, 2000);
+				});
+				
+				
+				fs.writeFileSync('./misc.json', JSON.stringify(misc));
+			}else{
+				msg.channel.sendMessage("Sorry you dont have permision to use this command");
+			}			
+
 	}}],
 	["acc",{process:
 		function(bot, msg, spam){
@@ -569,25 +676,7 @@ var commands = new Map([
 		function(bot,msg){
 			let misc = getJSON('./misc.json');
 			let current = Math.round(new Date() / 1000);
-			
-			let time = secondsToReasonableTime(current - misc.recTimer);
-			let reasonableTime = ""
-			if(time['days'] > 0) reasonableTime = reasonableTime + time['days'] + "day(s) ";
-			if(time['hours'] > 0){
-				if(time['minutes'] == 0 && time['seconds'] == 0) reasonableTime = reasonableTime + " and " + time['hours'] + " hour(s)";
-				else reasonableTime = reasonableTime + time['hours'] + " hour(s) ";
-			}
-			if(time['minutes'] > 0){
-				if(time['seconds'] == 0) reasonableTime = reasonableTime + " and " + time['minutes'] + " minute(s)";
-				else reasonableTime = reasonableTime + time['minutes'] + " minute(s) ";
-			}
-			if(time['seconds'] > 0){
-				if(time['days'] == 0 && time['hours'] == 0 && time['minutes'] == 0) reasonableTime = reasonableTime + time['seconds'] + " second(s)";
-				else reasonableTime = reasonableTime + "and " + time['seconds'] + " second(s)";			
-			
-			}
-						
-			msg.channel.sendMessage("It's been " + reasonableTime + " since Rec last fucked up an emote YouTried");
+			msg.channel.sendMessage("It's been " + secondsToReasonableTime(current - misc.recTimer) + " since Rec last fucked up an emote YouTried");
 			misc.recTimer = current;
 			fs.writeFileSync('./misc.json', JSON.stringify(misc));
 	}}],
@@ -595,24 +684,7 @@ var commands = new Map([
 		function(bot,msg){
 			let misc = getJSON('./misc.json');
 			let current = Math.round(new Date() / 1000);
-			
-			let time = secondsToReasonableTime(current - misc.shunTimer);
-			let reasonableTime = ""
-			if(time['days'] > 0) reasonableTime = reasonableTime + time['days'] + "day(s) ";
-			if(time['hours'] > 0){
-				if(time['minutes'] == 0 && time['seconds'] == 0) reasonableTime = reasonableTime + " and " + time['hours'] + " hour(s)";
-				else reasonableTime = reasonableTime + time['hours'] + " hour(s) ";
-			}
-			if(time['minutes'] > 0){
-				if(time['seconds'] == 0) reasonableTime = reasonableTime + " and " + time['minutes'] + " minute(s)";
-				else reasonableTime = reasonableTime + time['minutes'] + " minute(s) ";
-			}
-			if(time['seconds'] > 0){
-				if(time['days'] == 0 && time['hours'] == 0 && time['minutes'] == 0) reasonableTime = reasonableTime + time['seconds'] + " second(s)";
-				else reasonableTime = reasonableTime + "and " + time['seconds'] + " second(s)";			
-			
-			}
-			msg.channel.sendMessage("Call a Bondulance! It's been " + reasonableTime + " since Shun last stroked out on his keyboard BrokeBack");
+			msg.channel.sendMessage("Call a Bondulance! It's been " + secondsToReasonableTime(current - misc.shunTimer) + " since Shun last stroked out on his keyboard BrokeBack");
 			misc.shunTimer = current;
 			fs.writeFileSync('./misc.json', JSON.stringify(misc));
 	}}],
@@ -649,11 +721,290 @@ var commands = new Map([
 			msg.channel.sendMessage("Not so fast Morty :runner::skin-tone-1: you heard your mom :person_with_pouting_face::skin-tone-2: we’ve got adventures :fire: to go on Morty :scream::weary::ok_hand: Just you :facepalm::skin-tone-1:‍♂️:gun: and me :man:‍:microscope::gun: and sometimes your sister :information_desk_person::iphone: and sometimes your mom :woman::skin-tone-2:‍⚕️:racehorse: but :bangbang:️ NEVER :raised_hand: your :triumph: dad! :shrug::skin-tone-1:‍♂️:x::mask: You wanna :see_no_evil: know why Morty? :speak_no_evil::100: Because he CROSSED me :rage::no_good:‍♂️ Oh :dizzy_face: it gets darker Morty :sunglasses::new_moon_with_face: Welcome :alien: to the :sob: darkest :smiling_imp: year of our :man:‍:boy:adventures :pray::tired_face: First 1️⃣ thing that’s :woman:‍:microphone: different :interrobang:️ No more dad Morty :cool: He threatened :eyes::thumbsdown: to turn me in :raising_hand:‍♂️:cop: to the government :sweat::rolling_eyes: so I made him :drooling_face::rat: and the government :poop: go away");
 			msg.channel.sendMessage("I repla:confounded:ced them both :last_quarter_moon_with_face::first_quarter_moon_with_face:as the :smiling_imp: defacto :clown: patriarch :older_man::skin-tone-1: of your family :man:‍:girl:‍:boy:and :astonished: your universe :scream::milky_way::raised_hands: Your mom :racehorse: wouldn’t have :wave: accepted :handshake: me :rolling_eyes: if I came home :house_with_garden: without you :boy::skin-tone-1: and your sister :person_with_blond_hair:‍♀️ so now you know :mortar_board: the real :100: reason :star2: I rescued :helmet_with_cross: you :thumbsup: I JUST :nail_care::skin-tone-2: TOOK OVER :top::dizzy_face: THE FAMILY :man:‍:girl:‍:boy: MORTY :person_frowning::skin-tone-1:‍♂️ And :eyes: if you tell :speaking_head: your mom or sister :woman::skin-tone-2:‍⚕️:information_desk_person: I said any of this :speak_no_evil: I’ll deny it :no_good:‍♂️:triumph: And :smirk: they’ll take my side :two_hearts::relieved::couple: because I’m a :man_dancing: hero :medal::trophy: Morty :joy::rofl: And now :punch: you’re gonna have to do :juggler::skin-tone-1:‍♂️:monkey: whatever I say :stuck_out_tongue_closed_eyes: Morty :disappointed_relieved: Forever :clock1::clock5::clock930::clock10::skull: And I’ll go out :walking::skin-tone-2: and find :telescope: some more :scream_cat: of that :tongue: Mulan :martial_arts_uniform::dolls: Szechuan :dragon::izakaya_lantern:Teriyaki :tired_face::sweat_drops: dipping sauce :fire::ok_hand::pray: Morty :sweat_drops::sweat_drops::sweat_drops::raised_hands:");
 			msg.channel.sendMessage("Because that’s :point_right: what this :tada: is all about Morty :poultry_leg: That’s my :one:  one :point_up:️ arm :selfie: man :man_dancing: I’m not :x: driven :oncoming_automobile: by avenging :fist::skin-tone-1: my dead :skull: family :sob::family_mwg: Morty :droplet: That :rofl: was :hear_no_evil: FAKE :sparkles: I’m :man:‍:microscope: driven :dash: by finding :eyes: that :weary: McNugget :metal: :fries: Sauce :sweat_drops: I want :scream: that :flushed: Mulan :dragon::martial_arts_uniform: McNugget :clown: Sauce :eggplant::sweat_drops:Morty :sob: That’s :muscle::skin-tone-2: my series :clapper: arc :rainbow: Morty :crown: If it takes :heart:️ 9 :heart:️ seasons :heart:️ I WANT :tired_face: MY :clap: MCNUGGET :poultry_leg::fries: DIPPING SAUCE :sweat_drops:SZECHUAN :fire: SAUCE MORTY :rage::dizzy_face: IT’S :drooling_face: GONNA :cartwheel:‍♀️TAKE :rocket: US :ok_woman::skin-tone-1:‍♂️:older_man::skin-tone-1: ALL THE WAY :dizzy: TO :point_right: THE :point_right: END MORTY :checkered_flag: :nine: MORE :moneybag: SEASONS :robot: MORTY :gem: :nine:MORE SEASONS :raised_hands: UNTIL I GET :gift: THAT :heart_eyes: DIPPING :bangbang:️:fire: SZECHUAN :dolls: SAUCE :eggplant::sweat_drops::weary: FOR :nine::seven: MORE YEARS :hourglass:️:clock: MORTY :skull: I :clap: WANT :clap: THAT :clap: MCNUGGET :clap: SAUCE :clap: MORTY");
-	}}]
-	/*,["DnD", {process:
-		function(bot,msg){
-			msg.channel.sendMessage("moon2WOO we're going to start a DnD campaign! Juk has been kind enough to sacrifice his time to get one set up and dm for us, If you want to be added to the list of potential players type `!IWantToPlayDnD` and when the time comes to get the party set up there will be a draw to see who gets to play, from there we can schedule a time that works for everyone. More info to come soon!");				
 	}}],
+	["2D",{process:
+		function(bot,msg){
+			let i = randomIntBtw(1,101);
+			if(i < 85){
+				msg.channel.sendMessage("<:2Dab:331150764070404096> THIS <:2Dab:331150764070404096> MAN <:2Dab:331150764070404096> AROUSED <:2Dab:331150764070404096> BY <:2Dab:331150764070404096> 2D <:2Dab:331150764070404096> WENT <:2Dab:331150764070404096> TO <:2Dab:331150764070404096> SGDQ <:2Dab:331150764070404096> WITH <:2Dab:331150764070404096> A <:2Dab:331150764070404096> moon2SMUG <:2Dab:331150764070404096> SHIRT <:2Dab:331150764070404096> AND <:2Dab:331150764070404096> DABBED <:2Dab:331150764070404096> ON <:2Dab:331150764070404096> CAMERA <:2Dab:331150764070404096>");
+			}else if(i >= 85){
+				msg.channel.sendMessage("https://cdn.discordapp.com/attachments/292764371812089856/332663385277726721/dontbelieve2d.png");
+			}
+	}}],
+	["serverlist",{process:
+		function(bot,msg){
+			if(msg.author != bot.users.get("164837968668917760")){
+				msg.channel.sendMessage("sorry you do not have permision to use this command");
+				return;
+			}
+			let serverId = msg.content.slice(1).split(" ").slice(1).join(" ");
+			var guilds = bot.guilds;
+			if(serverId == ""){
+				console.log("Hyperbot is currently in " + guilds.size + " servers");
+				for(var [key, value] of guilds){
+					console.log(value.name + ": " + value.id);
+				}
+			}
+			else{
+				let guildMembers = guilds.get(serverId).members;
+				for(var [key, value] of guildMembers){
+					console.log(value.user.username);
+				}
+			}
+			
+	}}],
+	["editRole",{process:
+		function(bot,msg,approvedRoles){
+			if(approvedRole(adminRoles,msg.author) != false){
+				let mod = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+				let role = mod[0];
+				let property = mod[1];
+				let change = mod[2];
+								
+				role = msg.guild.roles.find("name",role)
+				if(role == null){
+					msg.channel.sendMessage(mod[0] + " is not a valid role");
+					return;
+				}
+				
+				switch(property) {
+					case 'name':
+					case 'Name':
+						role.setName(change)
+						 .then(r => console.log(`Edited name of role ${r}`))
+						.catch(
+							(reason) => {
+							console.log('Handle rejected promise ('+reason+') here.');
+							msg.channel.sendMessage("error, ask kdubs why");
+							});
+						break;
+					case 'color':
+					case 'colour':
+					case 'Color':
+					case 'Colour':
+						role.setColor(change)
+						.then(r => console.log(`Set color of role ${r}`))
+						.catch(
+							(reason) => {
+							console.log('Handle rejected promise ('+reason+') here.');
+							if(reason == 'Error: Forbidden'){
+								msg.channel.sendMessage("error, I cannot edit that role");
+							}else{
+								msg.channel.sendMessage("error, try entering another colour in hexcode");
+							}
+							});
+						break;
+					default:
+						msg.channel.sendMessage("try changing the role name or colour eg. `!editRole currentRoleName|name|newRoleName` or `!editRole currentRoleName|colour|#ff0000'");
+				}
+			}else{
+				msg.channel.sendMessage("Sorry you dont have permision to use this command");
+			}	
+			
+			
+			
+
+	}}],
+	/*["hexColour",{process:
+		function(bot,msg){
+			let name = msg.content.slice(1).split(" ").slice(1).join(" ");
+			let user = msg.guild.members.find('displayName', name);
+			console.log(user);
+			//msg.channel.sendMessage(user.colorRole.hexColor);
+	}}],*/
+	["myDownTime",{process:
+		function(bot,msg){
+			let players = getJSON('./dnd.json').playerArray;
+			for(let p in players){
+				let player = players[p];
+				if(player.user == msg.author.id){
+					if(player.downtime < 7)
+						msg.channel.sendMessage(player.character + ", you have " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime.");
+					else
+						msg.channel.sendMessage(player.character + ", you have " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime. You can exchange 7 of these for a downtime activity!");
+				}
+			}
+	}}],
+	["checkDownTime",{process:
+		function(bot,msg){
+			if(!approvedRole(dndApprovedRoles, msg.author)){
+				msg.channel.sendMessage("sorry you dont have permission to use this command");
+				return;
+			}
+			let players = getJSON('./dnd.json').playerArray;
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").toLowerCase().replace(/\s+/g, '');
+			var str = "";
+
+			for(let p in players){
+				let player = players[p];
+				if((player.character.toLowerCase() == input)||(input == 'list')){
+					str = str + player.character + " has " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime.\n";
+				}
+			}
+			if(str == "") msg.channel.sendMessage("please enter a valid input eg. `!checkdowntime gorthrak` or `!checkdowntime list`");
+			else msg.channel.sendMessage(str);
+	}}],
+	["addDownTime",{process:
+		function(bot,msg){
+			if(!approvedRole(dndApprovedRoles, msg.author)){
+				msg.channel.sendMessage("sorry you dont have permission to use this command");
+				return;
+			}
+			let dnd = getJSON('./dnd.json');
+			let players = dnd.playerArray;
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			
+			if(input.length != 2){
+				msg.channel.sendMessage("please enter valid input eg. `!addDownTime 2|Gorthrak`");
+				return;
+			}
+			
+			let days = parseInt(input[0]);
+			let character = input[1].toLowerCase().replace(/\s+/g, '');
+				
+			if(isNaN(days)){
+				msg.channel.sendMessage("please enter a valid number of days eg. `!addDownTime 2|Gorthrak`");
+				return;
+			}
+				
+			for(let p in players){
+				let player = players[p];
+				if(player.character.toLowerCase() == character){
+					player.downtime += days;
+					msg.channel.sendMessage(player.character + " now has " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime.");
+					fs.writeFileSync('./dnd.json', JSON.stringify(dnd));
+					return
+				}
+			}
+			msg.channel.sendMessage("please enter a valid character name eg. `!addDownTime 2|Gorthrak`");
+	}}],
+	["removeDownTime",{process:
+		function(bot,msg){
+			if(!approvedRole(dndApprovedRoles, msg.author)){
+				msg.channel.sendMessage("sorry you dont have permission to use this command");
+				return;
+			}
+			let dnd = getJSON('./dnd.json');
+			let players = dnd.playerArray;
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			
+			if(input.length != 2){
+				msg.channel.sendMessage("please enter valid input eg. `!removeDownTime 2|Gorthrak`");
+				return;
+			}
+			
+			let days = parseInt(input[0]);
+			let character = input[1].toLowerCase().replace(/\s+/g, '');
+				
+			if(isNaN(days)){
+				msg.channel.sendMessage("please enter a valid number of days eg. `!addDownTime 2|Gorthrak`");
+				return;
+			}
+				
+			for(let p in players){
+				let player = players[p];
+				if(player.character.toLowerCase() == character){
+					player.downtime -= days;
+					msg.channel.sendMessage(player.character + " now has " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime.");
+					fs.writeFileSync('./dnd.json', JSON.stringify(dnd));
+					return
+				}
+			}
+			msg.channel.sendMessage("please enter a valid character name eg. `!addDownTime 2|Gorthrak`");
+	}}],
+	["sessionTime", {process:
+		function(bot,msg){
+			console.log("test");
+			if(!approvedRole(dndApprovedRoles, msg.author)){
+				msg.channel.sendMessage("sorry you dont have permission to use this command");
+				return;
+			}
+			let dnd = getJSON('./dnd.json');
+			let players = dnd.playerArray;
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			let days = parseInt(input[0]);
+			
+			//checks if amount of input is valid
+			if(input.length != 2){
+				msg.channel.sendMessage("please enter valid input eg. `!sessionTime 2|Gorthrak, Yaya, Neldor`");
+				return;
+			}
+			//checks if input of days is valid
+			if(isNaN(days)){
+				msg.channel.sendMessage("please enter a valid number of days eg. `!addDownTime 2|Gorthrak`");
+				return;
+			}
+			
+			let played = input[1].toLowerCase().replace(/\s+/g, '').split(",");
+			var str = ""
+			var someoneNotGettingDowntime = false;
+			
+			
+			//checks if all characters provided as argument are valid
+			for(let p in played){
+				var valid = false;
+				for(let p2 in players){
+					if(players[p2].character.toLowerCase() == played[p]){
+						valid = true;
+					}
+				}
+				if(valid == false){
+					msg.channel.sendMessage(played[p] + " is not a valid character, please try again");
+					console.log("test");
+					return;
+				}
+			}
+			
+			for(let p3 in players){
+				let player = players[p3];
+				let absent = true;
+				
+				for(let p4 in played){
+					if(player.character.toLowerCase() == played[p4]){
+						absent = false;
+						someoneNotGettingDowntime = true;
+					}
+				}
+				
+				if(absent){
+					player.downtime += days;
+					str += player.character + " now has " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime.\n";
+				}
+			}
+			console.log("test2");
+			if(!someoneNotGettingDowntime){
+				msg.channel.sendMessage("everyone one is recieving downtime, check your input and try again eg. `!sessionTime 2| gorthrak, Yaya, neldor`");
+			}else{
+				msg.channel.sendMessage(str);
+				fs.writeFileSync('./dnd.json', JSON.stringify(dnd));
+			}
+	}}],
+	
+	
+	
+	/*-dnd stuff:
+		- !dndCommands
+		x !sessionTime (#days)|(list of characters who played seperated by ,) ...adds amount of days to everyone in the dndplayer json aray not listed (Titus only)
+		x !addDownTime (#days)|(character) 									  ...adds time to a character or list of characters (Titus only)
+		x !removeDownTime (#days)|(character) 								  ...removes time from a character or list of characters (Titus only)
+		x !myDownTime 														  ...displays msg.authors amount of downtime
+		x !checkdowntime (name)
+		- !downtimeList 													  ...displays a list of downtime activities and the cost of gold and time of each
+		- !findItem (name)													  ...displays all information for an item
+		- !listItems (name/rarity/price/type)|(search term/number/#range)     ...lists all items found from a search
+																		         (name: list all items containing a term) (rarity/price: list all items with specific or range of number) (type: list all items of a specific type)
+		- !addItem (name)|(rarity)|(price)|(type)							  ...adds a new item to the list (Titus only)
+		- !removeItem (name)												  ...removes an item from the list (Titus only)
+		- !inventory (itemType)|(#1)|(#2)|(#3)|(#4) 						  ...generates an inventory for the specified shop with the amount of items of each rarity randomly chosen from the list
+	   eg.!inventory accessory|5|3|0-2|0 										 (can indicate a range of possible number of items it chooses)
+	
+		let misc = getJSON('./misc.json');
+		fs.writeFileSync('./misc.json', JSON.stringify(misc));
+		let name = msg.content.slice(1).split(" ").slice(1).join(" ");
+	
+	*/	
+	
+	/* raffle commands
 	["IWantToPlayDnD", {process:
 		function(bot,msg){
 			let userName = msg.author.username;
@@ -690,21 +1041,94 @@ var commands = new Map([
 	}}]*/
 ]);
 //--------------------------HELPER FUNCTIONS-----------------------------------------------------
+function secToDate(secs){
+	var date = new Date();
+	date.setSeconds(secs);
+	return date;
+}
 function secondsToReasonableTime(secs){
-	var reasonableTime = {};
+	let time = {};
 	
-	reasonableTime['days'] = Math.floor(secs / 86400);
-	secs -= reasonableTime['days'] * 86400;
+	time['days'] = Math.floor(secs / 86400);
+	secs -= time['days'] * 86400;
 	
-	reasonableTime['hours'] = Math.floor(secs / 3600) % 24;
-	secs -= reasonableTime['hours'] * 3600
+	time['hours'] = Math.floor(secs / 3600) % 24;
+	secs -= time['hours'] * 3600
 	
-	reasonableTime['minutes'] = Math.floor(secs / 60) % 60;
-	secs -= reasonableTime['minutes'] * 60;
+	time['minutes'] = Math.floor(secs / 60) % 60;
+	secs -= time['minutes'] * 60;
 	
-	reasonableTime['seconds'] = Math.floor(secs % 60);
+	time['seconds'] = Math.floor(secs % 60);
 
+	
+	let reasonableTime = ""
+	if(time['days'] > 0) reasonableTime = reasonableTime + " " + time['days'] + "day(s)";
+	if(time['hours'] > 0){
+		if(time['minutes'] == 0 && time['seconds'] == 0 && time['days'] > 0) reasonableTime = reasonableTime + " and " + time['hours'] + " hour(s)";
+		else reasonableTime = reasonableTime + " " + time['hours'] + " hour(s)";
+	}
+	if(time['minutes'] > 0){
+		if(time['seconds'] == 0 && (time['hours'] > 0 || time['days'] > 0)) reasonableTime = reasonableTime + " and " + time['minutes'] + " minute(s)";
+		else reasonableTime = reasonableTime + " " + time['minutes'] + " minute(s)";
+	}
+	if(time['seconds'] > 0){
+		if(time['days'] == 0 && time['hours'] == 0 && time['minutes'] == 0) reasonableTime = reasonableTime + " " + time['seconds'] + " second(s)";
+		else reasonableTime = reasonableTime + " and " + time['seconds'] + " second(s)";			
+	}
+	
+	
 	return reasonableTime;
+}
+
+function unit2Mills(unit){
+	switch(unit.toLowerCase()){
+		case "y":
+		case "year":
+		case "years":
+			return 31556952;
+		case "mo":
+		case "month":
+		case "months":
+			return 2629746;
+		case "w":
+		case "week":
+		case "weeks":
+			return 604800;
+		case "d":
+		case "day":
+		case "days":
+			return 86400;
+		case "h":
+		case "hr":
+		case "hrs":
+		case "hour":
+		case "hours":
+			return 3600;
+		case "m":
+		case "min":
+		case "mins":
+		case "minute":
+		case "minutes":
+			return 60;
+		case "s":
+		case "sec":
+		case "secs":
+		case "second":
+		case "seconds":
+			return 1;
+		default:
+			return 0;
+	}
+}
+
+function checkReminderAdded(msg,startTime){
+	var reminders = getJSON('./reminders.json');
+	for(var i = 0; i < reminders.length; i++){
+		if((reminders[i].user == msg.author.id) && (reminders[i].start == startTime)){
+			return true;
+		}
+	}
+	return false;
 }
 
 function randomImgRule34(imgs,msg,search){
@@ -716,7 +1140,7 @@ function randomImgRule34(imgs,msg,search){
 			var tag = $('#main_image').prop("tagName");
 			console.log(tag);
 			if(tag == "IMG"){
-				msg.reply(search + " " + $('#main_image').attr('src'));
+				msg.channel.sendMessage(search + " " + $('#main_image').attr('src'));
 				return;
 			}else{
 				randomImgRule34(imgs,msg,search);
@@ -734,7 +1158,7 @@ function randomImgNsfw(imgs,msg,search){
 	request(imgLink,(error,result,html) => {
 		if(!error && result.statusCode === 200){
 			var $ = cheerio.load(html);
-			msg.reply(search + " " + $('.image_frame').find('img').attr('src'));
+			msg.channel.sendMessage(search + " " + $('.image_frame').find('img').attr('src'));
 		}else{
 			if(typeof result != 'undefined') console.log(result.statusCode + "-2");
 			else console.log("status code undefined -2");
@@ -897,10 +1321,105 @@ function rawrXD(msg){
 	*/
 }
 
+function approvedRole(approvedRoles, user){
+	for(let role of approvedRoles){
+		if(role.members.has(user.id)){
+			return role;
+		}
+	}
+	return false;
+}
+
+function checkReminders(){
+	//console.log("check");
+	let reminders = getJSON('./reminders.json');
+	let current = Math.round(new Date() / 1000);
+	
+	for(var i in reminders){
+		//console.log(current - reminders[i].start);
+		if((current - reminders[i].start) >= reminders[i].end){
+			if(reminders[i].msg === undefined){
+				bot.channels.get(reminders[i].channel).sendMessage("<@" + reminders[i].user + "> here's your reminder, next time you can leave a msg for me to remind you with using `!remindMe (time)|(message)`");
+			}else{
+				bot.channels.get(reminders[i].channel).sendMessage("<@" + reminders[i].user + "> " + reminders[i].msg);
+			}
+			delete reminders[i];
+			fs.writeFileSync('./reminders.json', JSON.stringify(reminders.filter(Boolean)));
+			break;
+		}
+	}
+}
+
+//var annaColours = {count:0, colours:['AF838D', 'B2394F', 'AEC97E', 'F2B4A2', 'E87171',  'F4909F']};
+function setRainbowRole(rainbowRole, user){
+	if(user.id == "191119825353965568"){
+		let x = randomIntBtw(0,annaColours.colours.length);
+		console.log(x);
+		setColour(rainbowRole, annaColours.colours[x]);
+		
+	}else if(user.id == "181850134747938816"){
+		let i = randomIntBtw(0,recColours.colours.length);
+		console.log(i);
+		setColour(rainbowRole, recColours.colours[i]);
+		
+	}else{
+		setColour(rainbowRole, "random");
+	}
+}
+
+function setColour(rainbowRole, colour){
+	if(colour == "random") colour = getRandomColor();
+	rainbowRole.setColor(colour)
+		.then()
+		.catch(
+			(reason) => {
+				console.log('Handle rejected promise ('+reason+') here.');
+				if(reason == 'Error: Forbidden'){
+					msg.channel.sendMessage("error, I cannot edit that role");
+				}else{
+					msg.channel.sendMessage("error, try entering another colour in hexcode");
+				}
+		});
+}
+
+function getRandomColor() {
+  var letters = '0123456789ABCDEF';
+  var color = '#';
+  for (var i = 0; i < 6; i++) {
+    color += letters[Math.floor(Math.random() * 16)];
+  }
+  //console.log(color);
+  return color;
+}
+
+
 //--------------------------EVENTS--------------------------------------------------------------------------------
 bot.on("message", msg => {
 	//ignore messages that don't start with ! or is from a bot
-	if(msg.author.bot) return;
+	if(msg.channel == botOnlyChannel){
+		if(msg.author.bot){
+			msgString = msg.cleanContent;
+			remindersChannel.send(msgString);
+		}
+		return;
+	}
+	else if(msg.author.bot){
+		return;
+	}
+	
+	//
+	if(msg.author.id == "164837968668917760"){
+		if(msg.channel.type == "dm"){
+			bot.channels.get("154419834728218625").sendMessage(msg.content);
+			return;
+		}
+	}
+	
+	let rainbowRole = approvedRole(rainbowRoles, msg.author);
+	if(rainbowRole != false){
+			setRainbowRole(rainbowRole, msg.author);
+	}
+	
 	
 	if(msg.content.indexOf(":3") > -1){
 		if(randomIntBtw(0,1000) == randomIntBtw(0,1000)){
@@ -928,9 +1447,14 @@ bot.on("message", msg => {
 	var txtKeys = getLowerCaseKeyMap(spam.txt, false);
 
 	var command = msg.content.slice(1).split(" ");
-	console.log(command[0]);
+	console.log("\n" + msg.guild.name + " - " + msg.channel.name + " - " + msg.author.username + ": " + command[0]);
 	var cmd = command[0].toLowerCase();
 	if(command[1]){	var cheer = command[1].toLowerCase();}
+	
+	//disables certain commands for the DnD server
+	if(msg.guild.id == "313766870064824320"){
+		if((cmd == "quote")||(cmd == "xd")) return;
+	}
 	
 	//takes the first word of the message and searches the commands Map, the cheers map, and the txt map, if it is a valid command it will run the coresponding function
 	//handles command map commands
@@ -938,11 +1462,11 @@ bot.on("message", msg => {
 		if(cmd == "cheerlist" || cmd == "randomcheer" || cmd == "spamlist"){
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam);
 		}else if(cmd == "addcheer"){
-			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,cheerAddRoles);
+			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,teamRoles);
 		}else if(cmd == "removecheer" || cmd == "removecommand" || cmd == "addcommand"){
-			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,cheerRemoveRoles);
-		}else if(cmd == "removequote"){
-			commands.get(cmdKeys.get(cmd)).process(bot,msg,cheerRemoveRoles);
+			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,adminRoles);
+		}else if(cmd == "removequote" || cmd == "kao" || cmd == "editrole"){
+			commands.get(cmdKeys.get(cmd)).process(bot,msg,adminRoles);
 		}else{
 			commands.get(cmdKeys.get(cmd)).process(bot,msg);
 		}
@@ -981,6 +1505,11 @@ bot.on("message", msg => {
 
 bot.on('guildMemberAdd',user =>{
 	var thc = bot.guilds.get('154419834728218625');
+	var misc = getJSON('./misc.json');
+	if(user.id == misc.lastKickedId){
+			user.addRoles(lastKickedRoles);
+		}
+	
     if(user.guild == thc){
 		bot.channels.get('278395091641565196').sendMessage("@here " + user.user.username + " has joined the server");
 	}
@@ -992,21 +1521,46 @@ bot.on('ready', () => {
 	
 	console.log(`Ready to server in ${bot.channels.size} channels on ${bot.guilds.size} servers, for a total of ${bot.users.size} users.`);
 	thc = bot.guilds.get('154419834728218625');
-	cheerAddRoles = [
-		thc.roles.get('275378439031095316'),	//Hyper SPAM Queen
-		thc.roles.get('278394315770822656'),	//Tech Help
-		thc.roles.get('276489543853801483'),	//Team HyperCat
-		thc.roles.get('278387425850556417'),	//HyperCat Coach
-		thc.roles.get('276488938456219659'),	//HyperKittens
+	testServer = bot.guilds.get('273241020077047810');
+	dndServer = bot.guilds.get('313766870064824320');
+	botOnlyChannel = bot.channels.get('309176012061671425');
+	
+	rainbowRoles = [
+		thc.roles.find("name","Brighter Ugly Pepe"),
+		thc.roles.find("name","Prinses"),
+		thc.roles.find("name","GAY"),
+		thc.roles.find("name","can't type"),
+		thc.roles.find("name","dead meme"),
+		thc.roles.find("name","unicorn barf"),
+		thc.roles.find("name","fucker"),
+		thc.roles.find("name","koreaboo")
 	];
 	
-	cheerRemoveRoles = [
+	teamRoles = [
 		thc.roles.get('275378439031095316'),	//Hyper SPAM Queen
-		thc.roles.get('278394315770822656'),	//Tech Help
-		thc.roles.get('278387425850556417'),	//HyperCat Coach
+		thc.roles.get('278394315770822656'),	//hypermods
+		thc.roles.get('276488938456219659')	    //HyperKittens
 	];
+	
+	adminRoles = [
+		thc.roles.get('275378439031095316'),	//Hyper SPAM Queen
+		thc.roles.get('278394315770822656'),	//Hypermods
+	];
+	
+	testServerRoles = [
+		testServer.roles.get('280120872654602241') //admin
+	];
+	
+	dndApprovedRoles = [
+		dndServer.roles.get('313767162919518209'), //Dungeon Master
+		dndServer.roles.get('337306193036836866')  //Master Botter
+	]
 	lastRoll = Math.round(new Date() / 1000);
 	lastSmurg = Math.round(new Date() / 1000);
+	
+	setInterval(function(){ checkReminders(); }, 1000);
+	//setInterval(function(){ setRainbowRole(thc.roles.find("name","Brighter Ugly Pepe"), thc.members.get("164837968668917760")); }, 1);
+	
 });
 //--------------------------END EVENTS----------------------------------------------------------------------------
 bot.login(token);
