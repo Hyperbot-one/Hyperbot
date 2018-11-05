@@ -1,22 +1,14 @@
 
 /*TODO:
-	- !kao fix invites for infinite time
-	- !kao add nickname storage
-	- !kao more than one kicked at a time
 	
 	-dnd stuff:
-		- !sessionTime (#days)|(list of characters who played seperated by ,) ...adds amount of days to everyone in the dndplayer json aray not listed (Titus only)
-		- !addDownTime (#days)|(character) 									  ...adds time to a character or list of characters (Titus only)
-		- !removeDownTime (#days)|(character) 								  ...removes time from a character or list of characters (Titus only)
-		- !myDownTime 														  ...displays msg.authors amount of downtime
-		- !downtimeList 													  ...displays a list of downtime activities and the cost of gold and time of each
-		- !findItem (name)													  ...displays all information for an item
-		- !listItems (name/rarity/price/type)|(search term/number/#range)     ...lists all items found from a search
-																		         (name: list all items containing a term) (rarity/price: list all items with specific or range of number) (type: list all items of a specific type)
-		- !addItem (name)|(rarity)|(price)|(type)							  ...adds a new item to the list (Titus only)
-		- !removeItem (name)												  ...removes an item from the list (Titus only)
+		- add calendar that advances with add downtime
+		- !calendar date
+		- !calendar setDays
+		- !calendar events (add)
 		- !inventory (itemType)|(#1)|(#2)|(#3)|(#4) 						  ...generates an inventory for the specified shop with the amount of items of each rarity randomly chosen from the list
 	   eg.!inventory accessory|5|3|0-2|0 										 (can indicate a range of possible number of items it chooses)
+		   upgrade item display
 		
 		
 	... plus others moon2T
@@ -26,9 +18,11 @@ const Discord = require("discord.js");
 const config = require("./config.json");
 const hidCmds = require("./hiddenCmds");
 const fs = require('fs');
+const Cleverbot = require("cleverbot-node");
 const request = require('request');
 const cheerio = require('cheerio');
-const Cleverbot = require("cleverbot-node");
+const Horseman = require('node-horseman');
+const googleTranslate = require('google-translate')(config.googleAPI);
 
 var bot = new Discord.Client();
 var token = config.token;
@@ -37,15 +31,53 @@ var cbKey = config.cbAPI;
 var roll20Cooldown;
 var lastKickedRoles;
 var cleverbotCounter = 0;
-var gdqStart = new Date(2018,0,7,9,30); //year, month(0-11), day, hour, minute
-var jenniferTime = new Date(2017,7,10,13,24);
+var gdqStart = new Date(2018,0,10,16,00); //year, month(0-11), day, hour, minute
 var remindersChannel;
 var remindersMsg;
 var botOnlyChannel;
 var rainbowRoles;
+var kdubs;
 var annaColours = {count:0, colours:['#AF838D', '#B2394F', '#AEC97E', '#F2B4A2', '#E87171',  '#F4909F']};
 var recColours = {count:0, colours:['#EE82EE', '#DA70D6', '#FF00FF', '#BA55D3', '#9370DB', '#8A2BE2', '#9400D3', '#9932CC', '#8B008B', '#800080', '#4B0082']};
-
+var oneTime = false;
+var bingQuotes = ['Once You Go In You Always Come Out Alive',
+				  'People Tell Me To Smile I Tell Them The Lack Of Emotion In My Face Doesn\'t Mean I\'m Unhappy',
+				  'I Hope It Doesn\'t Take For Me To Die For You To See What I Do For You',
+				  'Most Trees Are Blue',
+				  'How Can Mirrors Be Real If Our Eyes Aren\'t Real',
+				  '\"It\'s Your Birthday\" Mateo Said. I Didn\'t Respond. \"Are You Not Excited To Be 15\" He Asked. Reading My Book I Uttered \"I Turned 15 Long Ago\"',
+				  'If A Book Store Never Runs Out Of A Certain Book, Dose That Mean That Nobody Reads It, Or Everybody Reads It',
+				  'People Use To Ask Me What Do You Wanna Be When You Get Older And I Would Say What A Stupid Question The Real Question Is What Am I Right Now',
+				  'All The Rules In This World Were Made By Someone No Smarter Than You. So Make Your Own',
+				  'If Newborn Babies Could Speak They Would Be The Most Intelligent Beings On Planet Earth',
+				  'School Is The Tool To Brainwash The Youth',
+				  'If Everybody In The World Dropped Out Of School We Would Have A Much More Intelligent Society',
+				  'The Great Gatsby Is One Of The Greatest Movies Of All Time, Coachella.',
+				  'Trees Are Never Sad Look At Them Every Once In Awhile They\'re Quite Beautiful',
+				  'Why Is It Always 3 WHY IS IT ALWAYS 3!!!!!',
+				  'I Should Just Stop Tweeting, The Human Consciousness Must Raise Before I Speak My Juvenile Philosophy. / Shouts Out To @TIME',
+				  'There Is No Nutrients In Our Food Anymore Or In Our Soil OR IN OUR WATER',
+				  'You Would Have To Eat 5 Apples Today To Get The Same Nutritional Value As An Apple From 1950. #Fallow',
+				  'I Encourage You All To Unfollow Me So I Can Be Left With The People Who Actually Appreciate Philosophy And Poetry. / #CoolTapeVol2',
+				  'You Think You Get It. YOU DONT YOU DONT YOU DONT!!!!!!!',
+				  'Water In The Eyes And Alcohol In The Eyes Are Pretty Much The Same I Know This From First Hand Experience.',
+				  'Unawareness Is The Only Sin, And If You Were Aware You Would Know.',
+				  'Either I Lie To You Or We Cry Together',
+				  'When You Live Your Whole Life In A Prison Freedom Can Be So Dull.',
+				  'You Can Discover Everything You Need To Know About Everything By Looking At Your Hands',
+				  'When The First Animal Went Extinct That Should\'ve Bin A Sign.',
+				  'If I Die In My Flannel Will You Write My Poems On Tyler\'s 5 Panels And Jesusus Sandals This Plane Is Just To Much To Handle.',
+				  'Every 7 Years Your Body Is Completely Replaced With Entirely New Cells So Just Because You Look The Same Doesn\'t Mean You Are.',
+				  'I\'ve Bin Drinking Distilled Water For So Long That When I Drink Normal Water It Feels Like I\'m Swallowing Huge Chunks Of Aluminum.',
+				  'Anyone Born On This Planet Should Have A Planetary Citizenship Enabling Them To Freely Explore There Home',
+				  'You Taught Me How To Play The Piano But Have Never Heard Me.',
+				  'I\'m Glad That Our Distance Makes Us Witness Ourselves From A Different Entrance.',
+				  'I Just Like Showing Pretty Girls A Good Time Weather I\'m Physically There Or Not Doesn\'t Matter.',
+				  'Don\'t Worry Bae I\'ll Talk To You About SpaceTime Over FaceTime.',
+				  'The Head Of The Sphinx Will Fall Off In The Near Future.',
+				  'Dying Is MainStream #MONEY'];//37 Jaden Smith tweets
+			  
+							  
 //-------------COMMANDS -----------------------------------------------------------------
 var commands = new Map([
 	["spamList", {process:
@@ -578,17 +610,20 @@ var commands = new Map([
 			remindersChannel = msg.channel;
 			botOnlyChannel.send(txt);
 	}}],
-	["GDQCountdown", {process:
+	["OWLCountdown", {process:
 		function(bot,msg){
-			//msg.channel.sendMessage("Now you dumb fucks!");
-			console.log(gdqStart.toDateString());
-			msg.channel.sendMessage("AGDQ starts in" + secondsToReasonableTime((gdqStart.getTime() - (new Date().getTime()))/1000));
-	}}],
-	["FeelsWowMan", {process:
-		function(bot,msg){
-			//msg.channel.sendMessage("Now you dumb fucks!");
-			console.log(jenniferTime.toDateString());
-			msg.channel.sendMessage(secondsToReasonableTime((jenniferTime.getTime() - (new Date().getTime()))/1000) + " until the best moment of my life FeelsWowMan");
+			var horseman = new Horseman();
+			horseman
+				.open('https://overwatchleague.com/en-us/schedule')
+				.text('.Countdown.LiveMatch-countdown')
+				.then(function(text){
+					console.log("owlcountdown: " + text );
+					msg.channel.sendMessage("The next Overwatch League game is in " + text);
+				})
+				.finally(function(){
+					return horseman.close();
+				});
+
 	}}],
 	["commands", {process:
 		function(bot,msg){
@@ -619,7 +654,7 @@ var commands = new Map([
 					commandList = commandList + "!" + key + " (twitch/bd emote)\n";
 				} else if(key == "remindMe"){
 					commandList = commandList + "!" + key + " (time)|(message)\n";
-				} else if(key == "serverlist" || key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk" || key == "rec" || key == "shun" || key == "smurglord" || key == "booly" || key == "mcnugget"){
+				} else if(key == "test" || key == "serverlist" || key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk" || key == "rec" || key == "shun" || key == "smurglord" || key == "booly" || key == "mcnugget"){
 					continue;
 				} else{
 					commandList = commandList + "!" + key + "\n";
@@ -631,32 +666,33 @@ var commands = new Map([
 	["kao",{process: 
 		function(bot,msg,adminRoles){
 			if(approvedRole(adminRoles,msg.author) != false){
-				let misc = getJSON('./misc.json');
-				let user = msg.content.slice(1).split(" ").slice(1).join(" ");
-				let bannedMember = msg.guild.members.find('displayName', user);
-				console.log(bannedMember);
+				// let misc = getJSON('./misc.json');
+				 let user = msg.content.slice(1).split(" ").slice(1).join(" ");
+				 let bannedMember = msg.guild.members.find('displayName', user);
 				if(!bannedMember){
 					do{
 						bannedMember = msg.guild.members.random();
 					}while(approvedRole(adminRoles,bannedMember.user) != false);
 				}
-				let bannedUser = bannedMember.user;
+				//let bannedUser = bannedMember.user;
 				
-				misc.lastKickedId = bannedMember.id;
-				lastKickedRoles = bannedMember.roles;
-				console.log("before promise rejection?");
+				// misc.lastKickedId = bannedMember.id;
+				// lastKickedRoles = bannedMember.roles;
+				// console.log("before promise rejection?");
 				
 				msg.channel.sendMessage(bannedMember + "YOU CALL ME A PUSC? I FUK U UP! _BAN_ FeelsReinMan moon2BANNED");
-				msg.guild.defaultChannel.createInvite({maxAge:3600, maxUses:1}).then(invite => {
-					console.log("invite created")
-					let inviteLink = "http://discord.gg/" + invite.code;
-					bannedUser.send("YOU CALL ME A PUSC? I FUK U UP! _BAN_ FeelsReinMan moon2BANNED");
-					bannedUser.send("Im sorry, I love you please come back " + inviteLink);
-					setTimeout(() => { bannedMember.kick()}, 2000);
-				});
+				setTimeout(() => { msg.channel.sendMessage("Jebaited")}, 3000);
+				// msg.guild.defaultChannel.createInvite({maxAge:3600, maxUses:1}).then(invite => {
+					// console.log("invite created")
+					// let inviteLink = "http://discord.gg/" + invite.code;
+					// bannedUser.send("YOU CALL ME A PUSC? I FUK U UP! _BAN_ FeelsReinMan moon2BANNED");
+					// bannedUser.send("Im sorry, I love you please come back " + inviteLink);
+					// setTimeout(() => { bannedMember.kick()}, 2000);
+				// });
 				
 				
-				fs.writeFileSync('./misc.json', JSON.stringify(misc));
+				// fs.writeFileSync('./misc.json', JSON.stringify(misc));
+				
 			}else{
 				msg.channel.sendMessage("Sorry you dont have permision to use this command");
 			}			
@@ -687,6 +723,20 @@ var commands = new Map([
 			msg.channel.sendMessage("Call a Bondulance! It's been " + secondsToReasonableTime(current - misc.shunTimer) + " since Shun last stroked out on his keyboard BrokeBack");
 			misc.shunTimer = current;
 			fs.writeFileSync('./misc.json', JSON.stringify(misc));
+	}}],
+	["LULFratDied",{process:
+		function(bot,msg){
+			let misc = getJSON('./misc.json');
+			let ded = misc.fratlyDed
+			ded ++;
+			msg.channel.sendMessage("Fratly died AGAIN, thats " + ded + " times now EleGiggle");
+			misc.fratlyDed = ded;
+			fs.writeFileSync('./misc.json', JSON.stringify(misc));
+	}}],
+	["FratlyCounter",{process:
+		function(bot,msg){
+			let misc = getJSON('./misc.json');
+			msg.channel.sendMessage("Fratly has died " + misc.fratlyDed + " times now EleGiggle");
 	}}],
 	["smurglord", {process:
 		function(bot, msg){
@@ -726,7 +776,7 @@ var commands = new Map([
 		function(bot,msg){
 			let i = randomIntBtw(1,101);
 			if(i < 85){
-				msg.channel.sendMessage("<:2Dab:331150764070404096> THIS <:2Dab:331150764070404096> MAN <:2Dab:331150764070404096> AROUSED <:2Dab:331150764070404096> BY <:2Dab:331150764070404096> 2D <:2Dab:331150764070404096> WENT <:2Dab:331150764070404096> TO <:2Dab:331150764070404096> SGDQ <:2Dab:331150764070404096> WITH <:2Dab:331150764070404096> A <:2Dab:331150764070404096> moon2SMUG <:2Dab:331150764070404096> SHIRT <:2Dab:331150764070404096> AND <:2Dab:331150764070404096> DABBED <:2Dab:331150764070404096> ON <:2Dab:331150764070404096> CAMERA <:2Dab:331150764070404096>");
+				msg.channel.sendMessage("<a:ArousedBy2Dabs:394032814347124739> THIS <a:ArousedBy2Dabs:394032814347124739> MAN <a:ArousedBy2Dabs:394032814347124739> AROUSED <a:ArousedBy2Dabs:394032814347124739> BY <a:ArousedBy2Dabs:394032814347124739> 2D <a:ArousedBy2Dabs:394032814347124739> WENT <a:ArousedBy2Dabs:394032814347124739> TO <a:ArousedBy2Dabs:394032814347124739> SGDQ <a:ArousedBy2Dabs:394032814347124739> WITH <a:ArousedBy2Dabs:394032814347124739> A <a:ArousedBy2Dabs:394032814347124739> moon2SMUG <a:ArousedBy2Dabs:394032814347124739> SHIRT <a:ArousedBy2Dabs:394032814347124739> AND <a:ArousedBy2Dabs:394032814347124739> DABBED <a:ArousedBy2Dabs:394032814347124739> ON <a:ArousedBy2Dabs:394032814347124739> CAMERA <a:ArousedBy2Dabs:394032814347124739>");
 			}else if(i >= 85){
 				msg.channel.sendMessage("https://cdn.discordapp.com/attachments/292764371812089856/332663385277726721/dontbelieve2d.png");
 			}
@@ -734,24 +784,20 @@ var commands = new Map([
 	["serverlist",{process:
 		function(bot,msg){
 			if(msg.author != bot.users.get("164837968668917760")){
-				msg.channel.sendMessage("sorry you do not have permision to use this command");
+				msg.channel.sendMessage("sorry you do not have permission to use this command");
 				return;
 			}
 			let serverId = msg.content.slice(1).split(" ").slice(1).join(" ");
 			var guilds = bot.guilds;
-			if(serverId == ""){
-				console.log("Hyperbot is currently in " + guilds.size + " servers");
-				for(var [key, value] of guilds){
-					console.log(value.name + ": " + value.id);
-				}
-			}
-			else{
-				let guildMembers = guilds.get(serverId).members;
-				for(var [key, value] of guildMembers){
+			console.log("Hyperbot is currently in " + guilds.size + " servers");
+			for(let [key, value] of guilds){
+				console.log(value.name + ": " + value.id);
+				let guildMembers = value.members;
+				for(let [key, value] of guildMembers){
 					console.log(value.user.username);
 				}
-			}
-			
+				console.log("~~~~~~~");
+			}			
 	}}],
 	["editRole",{process:
 		function(bot,msg,approvedRoles){
@@ -771,7 +817,7 @@ var commands = new Map([
 					case 'name':
 					case 'Name':
 						role.setName(change)
-						 .then(r => console.log(`Edited name of role ${r}`))
+						 .then(r => {console.log(`Edited name of role ${r}`); msg.channel.sendMessage(`Edited name of role ${r}`);})
 						.catch(
 							(reason) => {
 							console.log('Handle rejected promise ('+reason+') here.');
@@ -783,7 +829,7 @@ var commands = new Map([
 					case 'Color':
 					case 'Colour':
 						role.setColor(change)
-						.then(r => console.log(`Set color of role ${r}`))
+						.then(r => {console.log(`Set colour of role ${r}`); msg.channel.sendMessage(`Edited colour of role ${r}`);})
 						.catch(
 							(reason) => {
 							console.log('Handle rejected promise ('+reason+') here.');
@@ -795,23 +841,206 @@ var commands = new Map([
 							});
 						break;
 					default:
-						msg.channel.sendMessage("try changing the role name or colour eg. `!editRole currentRoleName|name|newRoleName` or `!editRole currentRoleName|colour|#ff0000'");
+						msg.channel.sendMessage("try changing the role name or colour eg. `!editRole currentRoleName|name|newRoleName` or `!editRole currentRoleName|colour|#ff0000`");
+				}
+			}else if(approvedRole(personalRoles,msg.author) != false){
+				let role = approvedRole(personalRoles,msg.author);
+				let mod = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+				let property = mod[0];
+				let change = mod[1];
+				if(mod.length != 2){
+					msg.channel.sendMessage("try changing the role name or colour eg. `!editRole name|newRoleName` or `!editRole colour|#ff0000`");
+					return;
+				}
+
+				switch(property) {
+					case 'name':
+					case 'Name':
+						role.setName(change)
+						 .then(r => {console.log(`Edited name of role ${r}`); msg.channel.sendMessage(`Edited name of role ${r}`);})
+						.catch(
+							(reason) => {
+							console.log('Handle rejected promise ('+reason+') here.');
+							msg.channel.sendMessage("error, ask kdubs why");
+							});
+						break;
+					case 'color':
+					case 'colour':
+					case 'Color':
+					case 'Colour':
+						role.setColor(change)
+						.then(r => {console.log(`Set colour of role ${r}`); msg.channel.sendMessage(`Edited colour of role ${r}`);})
+						.catch(
+							(reason) => {
+							console.log('Handle rejected promise ('+reason+') here.');
+							if(reason == 'Error: Forbidden'){
+								msg.channel.sendMessage("error, I cannot edit that role");
+							}else{
+								msg.channel.sendMessage("error, try entering another colour in hexcode");
+							}
+							});
+						break;
+					default:
+						msg.channel.sendMessage("try changing the role name or colour eg. `!editRole name|newRoleName` or `!editRole colour|#ff0000`");
+				}
+
+			}
+			else{
+				msg.channel.sendMessage("Sorry you don't have permission to use this command");
+			}	
+	}}],
+	["getRoles",{process:
+		function(bot,msg){
+			var guilds = bot.guilds;
+			for(let [key, value] of guilds){
+				console.log(value.name + ": " + value.id);
+				let roles = value.roles;
+				for(let [key, value] of roles){
+					console.log("  " + value.name + ": " + value.id);
+				}
+				console.log("~~~~~~~");
+			}
+	
+	}}],
+	/*["test",{process:
+		function(bot,msg){
+			let quote = bingQuotes[randomIntBtw(0,37)];
+			msg.channel.sendMessage(quote);
+	}}],*/
+	["CtoF",{process:
+		function(bot,msg){
+			let Ctemp = parseInt(msg.content.slice(1).split(" ").slice(1).join(" "));
+			let Ftemp = (Ctemp * 1.8) + 32;
+			msg.channel.sendMessage(Ftemp + "F");
+	}}],
+	["FtoC",{process:
+		function(bot,msg){
+			let Ftemp = parseInt(msg.content.slice(1).split(" ").slice(1).join(" "));
+			let Ctemp = (Ftemp - 32)/1.8;
+			msg.channel.sendMessage(Ctemp + "C");
+	}}],
+	["Translate",{process:
+		function(bot,msg){
+			let mods = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			if(mods.length == 3){
+				let sourceLang = mods[0].toLowerCase();;
+				let targetLang = mods[1].toLowerCase();;
+				let translateTxt = mods[2];
+				if(config.googleLangs[sourceLang]){
+					if(config.googleLangs[targetLang]){
+						if(translateTxt === ""){
+							msg.channel.sendMessage("please enter a sentence to translate");
+						}else{
+							sourceLang = config.googleLangs[sourceLang];
+							targetLang = config.googleLangs[targetLang];
+							console.log(sourceLang + " | " + targetLang + " | " + translateTxt);
+							googleTranslate.translate(translateTxt, sourceLang, targetLang, function(err, translation) {
+								console.log(translation);
+								msg.channel.sendMessage(translation.translatedText);
+							});
+						}
+					}else{
+						console.log(targetLang + " not found");
+						msg.channel.sendMessage(targetLang + " not found");
+					}
+				}else{
+					console.log(sourceLang + " not found");
+					msg.channel.sendMessage(sourceLang + " not found");
+				}
+				//googleTranslate.translate(translateTxt, sourceLang, targetLang, function(err, translation) {
+				//	console.log(translation.translatedText);
+					// =>  { translatedText: 'Hallo', originalText: 'Hello', detectedSourceLanguage: 'en' }
+				//});
+			}else if(mods.length == 2){
+				let targetLang = mods[0].toLowerCase();
+				let translateTxt = mods[1];
+				if(config.googleLangs[targetLang]){
+					if(translateTxt === ""){
+						msg.channel.sendMessage("please enter a sentence to translate");
+					}else{
+						targetLang = config.googleLangs[targetLang];
+						console.log(targetLang + "|" + translateTxt);
+						googleTranslate.translate(translateTxt, targetLang, function(err, translation) {
+							console.log(translation);
+							msg.channel.sendMessage(translation.translatedText + "\n (source language: " + getKeyByValue(config.googleLangs, translation.detectedSourceLanguage) + ")");
+						});
+					}
+				}else{
+					console.log(targetLang + " not found");
+					msg.channel.sendMessage(targetLang + " not found");
 				}
 			}else{
-				msg.channel.sendMessage("Sorry you dont have permision to use this command");
-			}	
-			
-			
-			
+				msg.channel.sendMessage("not enough inputs, please enter a language to translate to, a language to translate from (optional), and a sentence to translate ex. `!Translate English|traduce esto.` or `!Translate Spanish|English|traduce esto.`");
+				return;
+			}
 
 	}}],
-	/*["hexColour",{process:
+	["hexColour",{process:
 		function(bot,msg){
 			let name = msg.content.slice(1).split(" ").slice(1).join(" ");
 			let user = msg.guild.members.find('displayName', name);
-			console.log(user);
-			//msg.channel.sendMessage(user.colorRole.hexColor);
-	}}],*/
+			//console.log(user);
+			msg.channel.sendMessage(user.displayHexColor);
+	}}],
+	
+	//**********************************************************************
+	// DnD commands for Avandra's Rest campaign
+	//**********************************************************************
+	["myMagicItem",{process:
+		function(bot,msg){
+			let players = getJSON('./dnd.json').playerArray;
+			for(let p in players){
+				let player = players[p];
+				if(player.user == msg.author.id){
+					msg.channel.sendMessage(player.item);
+				}
+			}
+	}}],
+	["findMagicItem",{process:
+		function(bot,msg){
+			if(!approvedRole(dndApprovedRoles, msg.author)){
+				msg.channel.sendMessage("sorry you dont have permission to use this command");
+				return;
+			}
+			let dnd = getJSON('./dnd.json');
+			let players = dnd.playerArray;
+			let character = msg.content.slice(1).split(" ").slice(1).join(" ");
+			
+			for(let p in players){
+				let player = players[p];
+				if(player.character == character){
+					msg.channel.sendMessage(player.item);
+					return;
+				}
+			}
+			msg.channel.sendMessage("Character name not recognized try again");
+	}}],
+	["addMagicItem",{process:
+		function(bot,msg){
+			if(!approvedRole(dndApprovedRoles, msg.author)){
+				msg.channel.sendMessage("sorry you dont have permission to use this command");
+				return;
+			}
+			let dnd = getJSON('./dnd.json');
+			let players = dnd.playerArray;
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			let character = input[0];
+			let item = input[1];
+			
+			for(let p in players){
+				if(players[p].character.toLowerCase() == character.toLowerCase()){
+					players[p].item = item;
+					if(players[p].item != ""){
+						msg.channel.sendMessage(players[p].character + "'s magic item has been added");
+						fs.writeFileSync('./dnd.json', JSON.stringify(dnd));
+					}else{
+						msg.channel.sendMessage("item not added, please try again with a correct input eg.`!addMagicItem Gorthrak|\"Gorthrak's super cool epic shield of blast your fucking face off\"`");
+					}
+					return;
+				}
+			}
+			msg.channel.sendMessage("Character name not recognized try again with a correct input eg.`!addMagicItem Gorthrak|\"Gorthrak's super cool epic shield of blast your fucking face off\"`");
+	}}],
 	["myDownTime",{process:
 		function(bot,msg){
 			let players = getJSON('./dnd.json').playerArray;
@@ -821,7 +1050,7 @@ var commands = new Map([
 					if(player.downtime < 7)
 						msg.channel.sendMessage(player.character + ", you have " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime.");
 					else
-						msg.channel.sendMessage(player.character + ", you have " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime. You can exchange 7 of these for a downtime activity!");
+						msg.channel.sendMessage(player.character + ", you have " + player.downtime + (player.downtime == 1 ? ' day' : ' days') + " of downtime. You can exchange 5 of these for a downtime activity!");
 				}
 			}
 	}}],
@@ -979,28 +1208,217 @@ var commands = new Map([
 				fs.writeFileSync('./dnd.json', JSON.stringify(dnd));
 			}
 	}}],
-	
+	["dndCommands", {process: 
+		function(bot,msg){
+			msg.channel.sendMessage("```!mydowntime \n!checkDownTime (list/PC name) \n!addDowntime (#days)|(PC name) \n!removeDownTime (#days)|(PC character) \n !sessionTime (#days)|(pc characters that played seperated by commas) eg. !sessiontime 2|Gorthrak, Yaya, Neldor```");
+				
+	}}],
+	["findItem", {process: 
+		function(bot,msg){
+			findItem(bot,msg);
+	}}],
+	["listItems", {process: 
+		function(bot,msg){
+			let dnd = getJSON('./dnd.json');
+			let items = dnd.itemArray;
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			if(input.length != 2){
+				msg.channel.sendMessage("please enter a valid search by name, rarity, price, or type eg. ```!listItems name|ring \n!listItems rarity|5\n!listItems price|100 or !listItems price|100-500\n!listItems type|Arcane```");
+				return;
+			}
+			let mod = input[0];
+			let search = input[1].toLowerCase().replace(/\s+/g, '');
+			let output = "```";
+			let found = false;
+			
+			switch(mod){
+				case "name":
+					for (let i in items){
+						let name = items[i].Item;
+						let rarity = items[i].Rarity;
+						let price = items[i].Price;
+						let type = items[i].Type;
+						if(items[i].Item.toLowerCase().replace(/\s+/g, '').indexOf(search) > -1){
+							output = output + "Item: " + name + ", Rarity: " + rarity + " Price: " + price + " Type: " + type + "\n";
+							found = true;
+						}
+					}
+					if(found == false){
+						msg.channel.sendMessage(mod + ": " + search + " not found");
+					}
+					break;
+				case "rarity":
+					for (let i in items){
+						let name = items[i].Item;
+						let rarity = items[i].Rarity;
+						let price = items[i].Price;
+						let type = items[i].Type;
+						if(isNaN(parseInt(search))){
+							msg.channel.sendMessage(search + " is not a number");
+							return;
+						}else{
+							if(parseInt(items[i].Rarity) == parseInt(search)){
+								output = output + "Item: " + name + ", Rarity: " + rarity + " Price: " + price + " Type: " + type + "\n";
+								found = true;
+							}
+						}
+					}
+					if(found == false){
+						msg.channel.sendMessage(mod + ": " + search + " not found");
+					}
+					break;	
+				case "price":
+					//search a range of prices
+					if(search.indexOf('-') > -1){
+						search = search.split('-');
+						let n1 = parseInt(search[0]);
+						let n2 = parseInt(search[1]);
+						if(isNaN(n1) || isNaN(n2)){
+							msg.channel.sendMessage("please enter a valid number range eg. !listItems price|100-500");
+						}else{
+							if(n1 > n2){
+								let buff = n1;
+								n1 = n2;
+								n2 = buff;
+							}
+							for(let i in items){
+								let name = items[i].Item;
+								let rarity = items[i].Rarity;
+								let price = items[i].Price;
+								let type = items[i].Type;
+								if((parseInt(price) >= n1) && (parseInt(price) <= n2)){
+									output = output + "Item: " + name + ", Rarity: " + rarity + " Price: " + price + " Type: " + type + "\n";
+									found = true;
+								}
+							}
+						}
+					//search exact price
+					}else{
+						if(isNaN(parseInt(search))){
+							msg.channel.sendMessage("Please enter a valid price or range to search eg. `!listItems price|100` or `!listItems price|100-500`");
+							break;
+						}else{
+							for (let i in items){
+								let name = items[i].Item;
+								let rarity = items[i].Rarity;
+								let price = items[i].Price;
+								let type = items[i].Type;
+								if(parseInt(items[i].Price) == parseInt(search)){
+									output = output + "Item: " + name + ", Rarity: " + rarity + " Price: " + price + " Type: " + type + "\n";
+									found = true;
+								}
+							}
+						}
+					}
+					if(found == false){
+						msg.channel.sendMessage(mod + ": " + search + " not found");
+					}
+					break;
+				case "type":
+					for (let i in items){
+						let name = items[i].Item;
+						let rarity = items[i].Rarity;
+						let price = items[i].Price;
+						let type = items[i].Type;
+						if(items[i].Type.toLowerCase().replace(/\s+/g, '').indexOf(search) > -1){
+							output = output + "Item: " + name + ", Rarity: " + rarity + " Price: " + price + " Type: " + type + "\n";
+							found = true;
+						}
+					}
+					if(found == false){
+						msg.channel.sendMessage(mod + ": " + search + " not found");
+					}
+					break;
+				default:
+					msg.channel.sendMessage(mod + " search filter not found, please search for items by name, rarity, price, or type eg. ```!listItems name|ring \n!listItems rarity|5\n!listItems price|100 or !listItems price|100-500\n!listItems type|Arcane```");
+			}
+			
+			if(found){
+				output = output + "```";
+				msg.channel.sendMessage(output, {split: {prepend: '```', append: '```'}});
+			}
+		
+	}}],
+	["addItem", {process: 
+		function(bot,msg){
+			let dnd = getJSON('./dnd.json');
+			let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+			if(input.length != 4){
+				msg.channel.sendMessage("please enter a valid item including name|rarity|price|type eg. !addItem Item of Testing|3|100|Accessory");
+				return;
+			}
+			let items = dnd.itemArray;
+			let name = input[0];
+			let rarity = parseInt(input[1]);
+			let price = parseInt(input[2]);
+			let type = input[3].replace(/\s+/g, '');
+			let validTypes = ["Accessory", "Alchemy", "Arcane", "Armor", "Clothing", "Weapon", "Wondrous"];
+			
+			if(isNaN(rarity) || rarity < 1 || rarity > 5){
+				msg.channel.sendMessage("The rarity entered is not a valid number (1 for common to 5 for legendary) try again eg. !addItem Item of Testing|3|100|Accessory");
+				return;
+			}
+			if(isNaN(price)){
+				msg.channel.sendMessage("The price entered is not a valid number, try again eg. !addItem Item of Testing|3|100|Accessory ");
+				return;
+			}
+			let found = false;
+			for(let i in validTypes){
+				if(type == validTypes[i]){
+					found = true;
+					break;
+				}
+			}
+			if(!found){
+				msg.channel.sendMessage(type + " is not a valid item type, try again using Accessory, Alchemy, Arcane, Clothing, Weapon, or Wondrous");
+				return;
+			}
+			if(findItem(bot,msg,true)){
+				msg.channel.sendMessage(name + " is already in the database");
+				
+			}else{
+				let item = {"Item": name,
+							"Rarity": rarity,
+							"Price": price,
+							"Type": type
+						   }
+				items.push(item);
+				fs.writeFileSync('./dnd.json', JSON.stringify(dnd));
+				if(findItem(bot,msg)){
+					msg.channel.sendMessage(name + " was successfully added to the list.");	
+				}else{
+					msg.channel.sendMessage(name + " was not added to the list try again.");
+				}
+			}
+	}}],
+				
+	//to test dndCommands, findItem
 	
 	
 	/*-dnd stuff:
-		- !dndCommands
+		x !dndCommands
 		x !sessionTime (#days)|(list of characters who played seperated by ,) ...adds amount of days to everyone in the dndplayer json aray not listed (Titus only)
 		x !addDownTime (#days)|(character) 									  ...adds time to a character or list of characters (Titus only)
 		x !removeDownTime (#days)|(character) 								  ...removes time from a character or list of characters (Titus only)
 		x !myDownTime 														  ...displays msg.authors amount of downtime
 		x !checkdowntime (name)
-		- !downtimeList 													  ...displays a list of downtime activities and the cost of gold and time of each
-		- !findItem (name)													  ...displays all information for an item
-		- !listItems (name/rarity/price/type)|(search term/number/#range)     ...lists all items found from a search
+		x !downtimeList 													  ...displays a list of downtime activities and the cost of gold and time of each
+		x !findItem (name)													  ...displays all information for an item
+		x !listItems (name/rarity/price/type)|(search term/number/#range)     ...lists all items found from a search
 																		         (name: list all items containing a term) (rarity/price: list all items with specific or range of number) (type: list all items of a specific type)
-		- !addItem (name)|(rarity)|(price)|(type)							  ...adds a new item to the list (Titus only)
-		- !removeItem (name)												  ...removes an item from the list (Titus only)
-		- !inventory (itemType)|(#1)|(#2)|(#3)|(#4) 						  ...generates an inventory for the specified shop with the amount of items of each rarity randomly chosen from the list
-	   eg.!inventory accessory|5|3|0-2|0 										 (can indicate a range of possible number of items it chooses)
+		x !addItem (name)|(rarity)|(price)|(type)							  ...adds a new item to the list (Titus only)
+		x !removeItem (name)												  ...removes an item from the list (Titus only)
+		O !inventory (itemType)|(#1)|(#2)|(#3)|(#4) 						  ...generates an inventory for the specified shop with the amount of items of each rarity randomly chosen from the list
+			eg.!inventory accessory|5|3|0-2|0 										 (can indicate a range of possible number of items it chooses)
+		O add images to items
+		O !findItem send as embed
+		O add calendar that advances with add downtime
+		O !calendar date
+		O !calendar setDays
+		O !calendar events (add)
+
+
 	
-		let misc = getJSON('./misc.json');
-		fs.writeFileSync('./misc.json', JSON.stringify(misc));
-		let name = msg.content.slice(1).split(" ").slice(1).join(" ");
 	
 	*/	
 	
@@ -1041,6 +1459,30 @@ var commands = new Map([
 	}}]*/
 ]);
 //--------------------------HELPER FUNCTIONS-----------------------------------------------------
+
+function findItem(bot,msg,check=false){
+	let input = msg.content.slice(1).split(" ").slice(1).join(" ").split("|");
+	let dnd = getJSON('./dnd.json');
+	let items = dnd.itemArray;
+		
+	for(let i in items){
+		if(items[i].Item.toLowerCase().replace(/\s+/g, '') == input[0].toLowerCase().replace(/\s+/g, '')){
+			//TO DO: send as embed with item image
+			let name = items[i].Item;
+			let rarity = items[i].Rarity;
+			let price = items[i].Price;
+			let type = items[i].Type;
+			msg.channel.sendMessage("```Item: " + name + "\nRarity: " + rarity + "\nPrice: " + price + "\nType: " + type + "```");
+			return true;
+		}
+	}
+	if(!check){
+		msg.channel.sendMessage(input[0] + " not found, please try again using the full item name eg. `!finditem wand of web`");
+	}
+	return false;
+}
+
+
 function secToDate(secs){
 	var date = new Date();
 	date.setSeconds(secs);
@@ -1179,6 +1621,10 @@ function writeSpam(cheersMap, txtMap){
 	fs.writeFileSync('./spam.json', json);	
 }
 
+function getKeyByValue(object, value) {
+  return Object.keys(object).find(key => object[key] === value);
+}
+
 function searchCheers(key,spam){
 	for(let cheer of Object.keys(spam.cheers)){
 		if(cheer == key){
@@ -1310,15 +1756,15 @@ function rawrXD(msg){
 	console.log(msg.author.username + " triggered with: " + msg);
 	msg.channel.sendMessage(":3");
 	setTimeout(() => { msg.channel.sendMessage(":C3")}, 2000);
-	setTimeout(() => { msg.channel.sendMessage("jk TrollFace")}, 4000);
-	/*
+	//setTimeout(() => { msg.channel.sendMessage("jk TrollFace")}, 4000);
+	
 	setTimeout(() => { msg.channel.sendMessage(":C==3")}, 6000);
 	setTimeout(() => { msg.channel.sendMessage(":C===3")}, 8000);
 	setTimeout(() => { msg.channel.sendMessage(":C====3")}, 10000);
 	setTimeout(() => { msg.channel.sendMessage(":OC====3")}, 12000);
 	setTimeout(() => { msg.channel.sendMessage(":o C====3")}, 14000);
 	setTimeout(() => { msg.channel.sendMessage(":D ~~C====3")}, 16000);
-	*/
+
 }
 
 function approvedRole(approvedRoles, user){
@@ -1350,16 +1796,13 @@ function checkReminders(){
 	}
 }
 
-//var annaColours = {count:0, colours:['AF838D', 'B2394F', 'AEC97E', 'F2B4A2', 'E87171',  'F4909F']};
 function setRainbowRole(rainbowRole, user){
 	if(user.id == "191119825353965568"){
 		let x = randomIntBtw(0,annaColours.colours.length);
-		console.log(x);
 		setColour(rainbowRole, annaColours.colours[x]);
 		
 	}else if(user.id == "181850134747938816"){
 		let i = randomIntBtw(0,recColours.colours.length);
-		console.log(i);
 		setColour(rainbowRole, recColours.colours[i]);
 		
 	}else{
@@ -1392,6 +1835,18 @@ function getRandomColor() {
   return color;
 }
 
+function bingQuote(){
+	let quote = bingQuotes[randomIntBtw(0,36)];
+	let now = new Date();
+	let minutes = now.getMinutes();
+	if(minutes == 0 && oneTime == false){
+		bot.channels.get("278704539056734211").sendMessage('<@210470562919743498> ' + quote);
+		oneTime = true;
+	} else if(minutes != 0 && oneTime == true){
+		oneTime = false;
+	}
+}
+	
 
 //--------------------------EVENTS--------------------------------------------------------------------------------
 bot.on("message", msg => {
@@ -1408,7 +1863,7 @@ bot.on("message", msg => {
 	}
 	
 	//
-	if(msg.author.id == "164837968668917760"){
+	if(msg.author.id == kdubs){
 		if(msg.channel.type == "dm"){
 			bot.channels.get("154419834728218625").sendMessage(msg.content);
 			return;
@@ -1428,6 +1883,10 @@ bot.on("message", msg => {
 	}
 	if((msg.content.indexOf("#suck-a-dick") > -1) || (msg.content.indexOf("#suck_a_dick") > -1)){
 		msg.reply("I really hope you're not telling me to suck a dick");
+	}
+	
+	if((msg.mentions.users.get("128780798399610880")) != null){
+		msg.reply("no u");
 	}
 	
 	let prefix = '!';
@@ -1452,8 +1911,21 @@ bot.on("message", msg => {
 	if(command[1]){	var cheer = command[1].toLowerCase();}
 	
 	//disables certain commands for the DnD server
-	if(msg.guild.id == "313766870064824320"){
+	if(msg.guild.id == "313766870064824320" && msg.channel.id != "335549937276420109"){
 		if((cmd == "quote")||(cmd == "xd")) return;
+		if((cmd == "listitems")||(cmd == "finditem")){
+			if((msg.channel.id != "337305982377918474")&&(msg.channel.id != "335549937276420109")&&(msg.author.id != "164837968668917760")){
+				msg.channel.sendMessage("please use this command in <#335549937276420109>");
+				return;
+			}
+		}
+	}
+	
+	if(msg.guild.id == "154419834728218625"){
+		if((cmd == "dragons") || (cmd == "whitedragon") || (cmd == "reddragon") || (cmd == "bluedragon") || (cmd == "greendragon") || (cmd == "blackdragon")){
+			console.log("dragons in thc");
+			return;
+		}
 	}
 	
 	//takes the first word of the message and searches the commands Map, the cheers map, and the txt map, if it is a valid command it will run the coresponding function
@@ -1489,51 +1961,76 @@ bot.on("message", msg => {
 		let misc = getJSON('./misc.json');
 		if(misc.cbCounter <= 1000){
 			var cleverMessage = msg.content.slice(2);
-			cleverbot.write(cleverMessage, function (response) {
-				console.log(msg.author.username + ": " + cleverMessage);
-				console.log("cleverbot: " + response.output);
-				msg.reply(response.output);
-			});
-			misc.cbCounter++;
-			console.log("cleverbot counter: " + misc.cbCounter);
-			fs.writeFileSync('./misc.json', JSON.stringify(misc));
+			if((cleverMessage.toLowerCase().includes("butthole")) || (cleverMessage.toLowerCase().includes("butt hole"))){
+				msg.reply("Dude not cool.");
+			} else {
+				cleverbot.write(cleverMessage, function (response) {
+					console.log(msg.author.username + ": " + cleverMessage);
+					console.log("cleverbot: " + response.output);
+					msg.reply(response.output);
+				});
+				misc.cbCounter++;
+				console.log("cleverbot counter: " + misc.cbCounter);
+				fs.writeFileSync('./misc.json', JSON.stringify(misc));
+			}
 		}else{
 				msg.reply("I've exceded 1k messages today, time to nap");
 		}
 	}
 });
 
-bot.on('guildMemberAdd',user =>{
+bot.on('guildMemberAdd',member =>{
 	var thc = bot.guilds.get('154419834728218625');
 	var misc = getJSON('./misc.json');
-	if(user.id == misc.lastKickedId){
-			user.addRoles(lastKickedRoles);
+	if(member.id == misc.lastKickedId){
+			member.addRoles(lastKickedRoles);
 		}
 	
-    if(user.guild == thc){
-		bot.channels.get('278395091641565196').sendMessage("@here " + user.user.username + " has joined the server");
+    if(member.guild == thc){
+		if(member.id == "220438649227968513"){
+			member.addRoles(["279836856395235328","330586569801203712"]) //nsfw, hyperkitten
+				.then(r => console.log(`added role ${r} to user`))
+				.catch((reason) => {
+					console.log('Error Adding Role: Handle rejected promise ('+reason+') here.');
+				}
+			);
+		}else{
+			bot.channels.get('278395091641565196').sendMessage("@here " + member.user.username + " has joined the server");
+		}
 	}
 });
+
 
 bot.on('ready', () => {
 	cleverbot = new Cleverbot;
 	cleverbot.configure({botapi: cbKey});
 	
 	console.log(`Ready to server in ${bot.channels.size} channels on ${bot.guilds.size} servers, for a total of ${bot.users.size} users.`);
+	
 	thc = bot.guilds.get('154419834728218625');
 	testServer = bot.guilds.get('273241020077047810');
 	dndServer = bot.guilds.get('313766870064824320');
 	botOnlyChannel = bot.channels.get('309176012061671425');
 	
 	rainbowRoles = [
-		thc.roles.find("name","Brighter Ugly Pepe"),
-		thc.roles.find("name","Prinses"),
-		thc.roles.find("name","GAY"),
-		thc.roles.find("name","can't type"),
-		thc.roles.find("name","dead meme"),
-		thc.roles.find("name","unicorn barf"),
-		thc.roles.find("name","fucker"),
-		thc.roles.find("name","koreaboo")
+		thc.roles.get('332937724233515019'), //velv role - Prinses
+		thc.roles.get('334149357337313291'), //sin role - GAY
+		thc.roles.get('334156905549266945'), //rec role - Can't Type
+		thc.roles.get('334223963322581004'), //woops role - Dead Meme
+		thc.roles.get('334227066931380225'), //juk role - Unicorn Barf
+		thc.roles.get('334227296246562816'), //amat role - Fucker
+		//thc.roles.find("name","Koreaboo")
+		//thc.roles.get('334230581833629697'), //anna role - Koreaboo
+	];
+	
+	personalRoles = [
+	//thc.roles.get(''),
+		thc.roles.get('294710091154718730'), //kdubs role - Best Pepe
+		thc.roles.get('417763957684699136'), //shun's role
+		thc.roles.get('417775035152072715'), //cheese's role
+		thc.roles.get('334227296246562816'), //amat's role
+		thc.roles.get('417325479054409728'), //matt's role
+		thc.roles.get('334230581833629697'), //anna role - Koreaboo
 	];
 	
 	teamRoles = [
@@ -1545,6 +2042,7 @@ bot.on('ready', () => {
 	adminRoles = [
 		thc.roles.get('275378439031095316'),	//Hyper SPAM Queen
 		thc.roles.get('278394315770822656'),	//Hypermods
+		dndServer.roles.get('313767162919518209'), //Dungeon Master
 	];
 	
 	testServerRoles = [
@@ -1555,10 +2053,12 @@ bot.on('ready', () => {
 		dndServer.roles.get('313767162919518209'), //Dungeon Master
 		dndServer.roles.get('337306193036836866')  //Master Botter
 	]
+	
+	kdubs = "164837968668917760";
 	lastRoll = Math.round(new Date() / 1000);
 	lastSmurg = Math.round(new Date() / 1000);
 	
-	setInterval(function(){ checkReminders(); }, 1000);
+	setInterval(function(){ checkReminders(); /*bingQuote();*/}, 1000);
 	//setInterval(function(){ setRainbowRole(thc.roles.find("name","Brighter Ugly Pepe"), thc.members.get("164837968668917760")); }, 1);
 	
 });
