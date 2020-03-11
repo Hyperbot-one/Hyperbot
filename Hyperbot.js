@@ -22,11 +22,13 @@ const Cleverbot = require("cleverbot-node");
 const request = require('request');
 const cheerio = require('cheerio');
 const Horseman = require('node-horseman');
-const googleTranslate = require('google-translate')(config.googleAPI);
+const {Translate} = require('@google-cloud/translate');
 
 var bot = new Discord.Client();
 var token = config.token;
 var cbKey = config.cbAPI;
+var projectID = config.googleProjectID;
+const googleTranslate = new Translate({projectID});
 
 var roll20Cooldown;
 var lastKickedRoles;
@@ -36,46 +38,62 @@ var remindersChannel;
 var remindersMsg;
 var botOnlyChannel;
 var rainbowRoles;
+var dndServer;
 var kdubs;
 var annaColours = {count:0, colours:['#AF838D', '#B2394F', '#AEC97E', '#F2B4A2', '#E87171',  '#F4909F']};
 var recColours = {count:0, colours:['#EE82EE', '#DA70D6', '#FF00FF', '#BA55D3', '#9370DB', '#8A2BE2', '#9400D3', '#9932CC', '#8B008B', '#800080', '#4B0082']};
 var oneTime = false;
-var bingQuotes = ['Once You Go In You Always Come Out Alive',
-				  'People Tell Me To Smile I Tell Them The Lack Of Emotion In My Face Doesn\'t Mean I\'m Unhappy',
-				  'I Hope It Doesn\'t Take For Me To Die For You To See What I Do For You',
-				  'Most Trees Are Blue',
-				  'How Can Mirrors Be Real If Our Eyes Aren\'t Real',
-				  '\"It\'s Your Birthday\" Mateo Said. I Didn\'t Respond. \"Are You Not Excited To Be 15\" He Asked. Reading My Book I Uttered \"I Turned 15 Long Ago\"',
-				  'If A Book Store Never Runs Out Of A Certain Book, Dose That Mean That Nobody Reads It, Or Everybody Reads It',
-				  'People Use To Ask Me What Do You Wanna Be When You Get Older And I Would Say What A Stupid Question The Real Question Is What Am I Right Now',
-				  'All The Rules In This World Were Made By Someone No Smarter Than You. So Make Your Own',
-				  'If Newborn Babies Could Speak They Would Be The Most Intelligent Beings On Planet Earth',
-				  'School Is The Tool To Brainwash The Youth',
-				  'If Everybody In The World Dropped Out Of School We Would Have A Much More Intelligent Society',
-				  'The Great Gatsby Is One Of The Greatest Movies Of All Time, Coachella.',
-				  'Trees Are Never Sad Look At Them Every Once In Awhile They\'re Quite Beautiful',
-				  'Why Is It Always 3 WHY IS IT ALWAYS 3!!!!!',
-				  'I Should Just Stop Tweeting, The Human Consciousness Must Raise Before I Speak My Juvenile Philosophy. / Shouts Out To @TIME',
-				  'There Is No Nutrients In Our Food Anymore Or In Our Soil OR IN OUR WATER',
-				  'You Would Have To Eat 5 Apples Today To Get The Same Nutritional Value As An Apple From 1950. #Fallow',
-				  'I Encourage You All To Unfollow Me So I Can Be Left With The People Who Actually Appreciate Philosophy And Poetry. / #CoolTapeVol2',
-				  'You Think You Get It. YOU DONT YOU DONT YOU DONT!!!!!!!',
-				  'Water In The Eyes And Alcohol In The Eyes Are Pretty Much The Same I Know This From First Hand Experience.',
-				  'Unawareness Is The Only Sin, And If You Were Aware You Would Know.',
-				  'Either I Lie To You Or We Cry Together',
-				  'When You Live Your Whole Life In A Prison Freedom Can Be So Dull.',
-				  'You Can Discover Everything You Need To Know About Everything By Looking At Your Hands',
-				  'When The First Animal Went Extinct That Should\'ve Bin A Sign.',
-				  'If I Die In My Flannel Will You Write My Poems On Tyler\'s 5 Panels And Jesusus Sandals This Plane Is Just To Much To Handle.',
-				  'Every 7 Years Your Body Is Completely Replaced With Entirely New Cells So Just Because You Look The Same Doesn\'t Mean You Are.',
-				  'I\'ve Bin Drinking Distilled Water For So Long That When I Drink Normal Water It Feels Like I\'m Swallowing Huge Chunks Of Aluminum.',
-				  'Anyone Born On This Planet Should Have A Planetary Citizenship Enabling Them To Freely Explore There Home',
-				  'You Taught Me How To Play The Piano But Have Never Heard Me.',
-				  'I\'m Glad That Our Distance Makes Us Witness Ourselves From A Different Entrance.',
-				  'I Just Like Showing Pretty Girls A Good Time Weather I\'m Physically There Or Not Doesn\'t Matter.',
-				  'Don\'t Worry Bae I\'ll Talk To You About SpaceTime Over FaceTime.',
-				  'The Head Of The Sphinx Will Fall Off In The Near Future.',
-				  'Dying Is MainStream #MONEY'];//37 Jaden Smith tweets
+var Quoths = [	'Which program do Jedi use to open PDF files?\n\nAdobe Wan Kenobi.',
+				'Which website did Chewbacca get arrested for creating?\n\nWookieleaks.',
+'Why did Anakin Skywalker cross the road?\n\nTo get to the Dark Side.',
+'Is BB hungry?\n\nNo, BB8.',
+'How did Darth Vader know what Luke was getting for Xmas?\n\nHe felt his presents.',
+'Why did Kylo Ren chase Rey through the forest?\n\nHe probably just wanted a girlfriend. After all, he’d Ben Solo for so long.',
+'How does Wicket get around Endor?\n\nEwoks.',
+'What do you call a pirate droid?\n\nArrgghh-2-D2.',
+'What do Gungans put things in?\n\nJar Jars.',
+'What do you call Chewbacca when he has chocolate stuck in his hair?\n\nChocolate Chip Wookiee.',
+'Why does Princess Leia keep her hair tied up in buns?\n\nSo it doesn’t Hang Solow.',
+'How do you unlock doors on Kashyyyk?\n\nWith a woo-key.',
+'Which Star Wars character works at a restaurant?\n\nDarth Waiter.',
+'What’s a baseball player’s least favorite Star Wars movie?\n\nThe Umpire Strikes Back.',
+'Why did Anakin change his nickname to Skywalker?\n\nHe couldn’t stand the old one Ani longer.',
+'What do you call an invisible droid?\n\nC-through-PO.',
+'Which Jedi became a rock star?\n\nBon Jovi-Wan Kenobi.',
+'What did Obi Wan tell Luke when he had trouble eating Chinese food?\n\nUse the forks, Luke.',
+'Why is Yoda such a good gardener?\n\nBecause he has a green thumb.',
+'What did Obi-Wan say at the rodeo?\n\nUse the horse, Luke!',
+'What’s the most popular Star Wars movie in Italy?\n\nThe Phantom Venice.',
+'How do Ewoks communicate over long distances?\n\nWith Ewokie Talkies.',
+'What do you call a bird of prey with a thousand lives?\n\nA millennium falcon!',
+'What do you get if you mix a bounty hunter with a tropical fruit?\n\nMango Fett!',
+'Why was the droid angry?\n\nPeople kept pushing its buttons.',
+'What is Jabba the Hutt’s middle name?\n\n“The.”',
+'What kind of car takes you to a jedi?\n\nA toyoda.',
+'What do you call 5 Siths piled on top of a lightsaber?\n\nA Sith-Kabob.',
+'Why is Luke Skywalker always invited on picnics?\n\nHe always has the forks with him.',
+'What do you call an evil procrastinator?\n\nDarth Later.',
+'Why is The Force like duct tape?\n\nIt has a light side, a dark side, and it binds the galaxy together.',
+'What do you call a Jedi who’s in denial?\n\nObi-Wan Cannot Be.',
+'Why is a droid mechanic never lonely?\n\nBecause he’s always making new friends.',
+'What would you call Padme if she was a dog?\n\nPetme Imadoggie.',
+'Why do doctors make the best Jedi?\n\nBecause a Jedi must have patience.',
+'Why can’t you count on Yoda to pick up the tab?\n\nBecause he’s always a little short.',
+'Which Star Wars character travels around the world?\n\nGlobi-wan Kenobi.',
+'What do you call Harrison Ford when he smokes weed?\n\nHan So-high.',
+'What do you call a potato that has turned to the Dark side?\n\nDarth Tater.',
+'Where does Jabba the Hutt eat?\n\nPizza Hutt.',
+'Where did Luke get his bionic hand?\n\nThe second hand store.',
+'When did Anakin’s Jedi masters know he was leaning towards the dark side?\n\nIn the Sith Grade.',
+'What is a Jedi’s favorite toy?\n\nA yo-yoda.',
+'Where do Sith shop?\n\nThe Maul. Everything is half off.',
+'What’s the internal temperature of a Tauntaun?\n\nLukewarm.',
+'What do you call a Sith who won’t fight?\n\nA Sithy.',
+'How do Tusken’s cheat on their taxes?\n\nThey always single file, to hide their numbers.',
+'What do storm troopers eat?\n\nWookie steak, but it’s a little Chewy.',
+'Why did movies 4, 5, and 6 come before 1, 2, and 3?\n\nBecause in charge of directing, Yoda was.',
+'If you date someone who doesn’t like Star Wars puns…\n\nThen you’re looking for love in Alderaan places.'
+];//37 Jaden Smith tweets
 			  
 							  
 //-------------COMMANDS -----------------------------------------------------------------
@@ -439,6 +457,24 @@ var commands = new Map([
 				msg.reply("this user has !avatar disabled");
 			}
 	}}],
+	["alert", {process:
+		function(bot, msg){
+			let userName = msg.content.slice(1).split(" ").slice(1).join(" ");
+			let user = bot.users.find('username', userName);
+			if(user == null){
+				user = msg.guild.members.find('nickname', userName);
+				if(user == null){
+					msg.reply(userName + " does not exist");
+					return;
+				} else {
+					user = user.user;
+				}
+			}
+			
+			msg.channel.send("<@"+user.id+"> <a:Siren:555747621814403073> BIG NERD ALERT <a:Siren:555747621814403073>")
+				.then(message => console.log(`Sent message: ${message.content}`))
+				.catch(console.error);;
+	}}],
 	["blacklist", {process:
 		function(bot, msg){
 			let mod = msg.content.slice(1).split(" ")[1];
@@ -524,19 +560,19 @@ var commands = new Map([
 	}}],
 	["nsfw", {process:
 		function(bot,msg){
-			if(msg.channel.id == "279096351139168258"){
+			if(msg.channel.id == "279096351139168258" || msg.channel.id == "280543345720295424"){
 				let search = "";
 				let mod = "";
-				if(msg.content.slice(1).split(" ").slice(2)[0] == "gay"){
-					mod = ".gay";
+				if(msg.content.slice(1).split(" ").slice(1)[0] == "gay"){
 					search = msg.content.slice(1).split(" ").slice(3).join(" ");
+					search = "gay+" + search;
 				}else{
-					mod = "";
 					search = msg.content.slice(1).split(" ").slice(2).join(" ");
 				}
 				
 				let type = msg.content.slice(1).split(" ").slice(1)[0];
 				search = search.replace(" ","_");
+				
 				if(type == "gif"){
 					type = 'gifs';
 				}else if(type == "pic"){
@@ -545,8 +581,8 @@ var commands = new Map([
 					msg.channel.sendMessage("please enter a valid type, currently only gifs and pics work, videos coming soon. `!nsfw (gif/pic) (search terms)` with out the parenthesis");
 					return;
 				}
-				request(`http://www${mod}.sex.com/search/${type}?query=${search}`, (err, res, data) => {
-					if(!err && res.statusCode === 200){
+				request(`http://www.sex.com/search/${type}?query=${search}`, (err, res, data) => {
+					if(!err /*&& res.statusCode === 200*/){
 						var $ = cheerio.load(data);
 						var imgURLs = [];
 						$('.image_wrapper').each(function(i, element){imgURLs.push("http://www" + mod + ".sex.com" + this.attribs.href);});
@@ -654,7 +690,7 @@ var commands = new Map([
 					commandList = commandList + "!" + key + " (twitch/bd emote)\n";
 				} else if(key == "remindMe"){
 					commandList = commandList + "!" + key + " (time)|(message)\n";
-				} else if(key == "test" || key == "serverlist" || key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk" || key == "rec" || key == "shun" || key == "smurglord" || key == "booly" || key == "mcnugget"){
+				} else if(key == "quoth" || key == "serverlist" || key == "acc" || key == "giveaway" || key == "IWantToPlayDnD" || key == "DnDDraw" || key == "juk" || key == "rec" || key == "shun" || key == "smurglord" || key == "booly" || key == "mcnugget"){
 					continue;
 				} else{
 					commandList = commandList + "!" + key + "\n";
@@ -724,6 +760,17 @@ var commands = new Map([
 			misc.shunTimer = current;
 			fs.writeFileSync('./misc.json', JSON.stringify(misc));
 	}}],
+	["ze",{process:
+		function(bot,msg){
+			msg.channel.sendMessage("Cunt")
+			.then(message => message.react(dndServer.emojis.get('460290371650584576')))
+			.catch(console.error);
+	}}],
+	["cunt",{process:
+		function(bot,msg){
+			msg.channel.sendMessage("Ze")
+			.catch(console.error);
+	}}],
 	["LULFratDied",{process:
 		function(bot,msg){
 			let misc = getJSON('./misc.json');
@@ -741,7 +788,7 @@ var commands = new Map([
 	["smurglord", {process:
 		function(bot, msg){
 			var cooldown = Math.round(new Date() / 1000) - lastSmurg;
-			if(cooldown >= 600){
+			if(cooldown >= 10){
 				msg.channel.sendMessage("now summoning the Smurglord...");
 				setTimeout(() => { msg.channel.sendMessage("<@155123023496740865> ***ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn***")}, 1000);
 				setTimeout(() => { msg.channel.sendMessage("<@155123023496740865> ***ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn***")}, 2000);
@@ -756,7 +803,7 @@ var commands = new Map([
 		function(bot,msg){
 			let i = randomIntBtw(1,101);
 			if(i < 85){
-				msg.channel.sendMessage(":alarm_clock: 🇮 🇹 🇸 \n:alarm_clock: 🇧 🇴 🇴 🇱 🇾 \n:alarm_clock: 🇹 🇮 🇲 🇪");
+				msg.channel.sendMessage(":alarm_clock: ðŸ‡® ðŸ‡¹ ðŸ‡¸ \n:alarm_clock: ðŸ‡§ ðŸ‡´ ðŸ‡´ ðŸ‡± ðŸ‡¾ \n:alarm_clock: ðŸ‡¹ ðŸ‡® ðŸ‡² ðŸ‡ª");
 			}else if(i >= 85 && i < 95){
 				msg.channel.sendMessage(":alarm_clock: :regional_indicator_i: :regional_indicator_t: :regional_indicator_s: \n"
 									  + ":alarm_clock: :regional_indicator_b: :regional_indicator_o: :regional_indicator_o: :regional_indicator_l: :regional_indicator_y: \n"
@@ -768,9 +815,9 @@ var commands = new Map([
 	}}],
 	["mcnugget", {process:
 		function(bot,msg){
-			msg.channel.sendMessage("Not so fast Morty :runner::skin-tone-1: you heard your mom :person_with_pouting_face::skin-tone-2: we’ve got adventures :fire: to go on Morty :scream::weary::ok_hand: Just you :facepalm::skin-tone-1:‍♂️:gun: and me :man:‍:microscope::gun: and sometimes your sister :information_desk_person::iphone: and sometimes your mom :woman::skin-tone-2:‍⚕️:racehorse: but :bangbang:️ NEVER :raised_hand: your :triumph: dad! :shrug::skin-tone-1:‍♂️:x::mask: You wanna :see_no_evil: know why Morty? :speak_no_evil::100: Because he CROSSED me :rage::no_good:‍♂️ Oh :dizzy_face: it gets darker Morty :sunglasses::new_moon_with_face: Welcome :alien: to the :sob: darkest :smiling_imp: year of our :man:‍:boy:adventures :pray::tired_face: First 1️⃣ thing that’s :woman:‍:microphone: different :interrobang:️ No more dad Morty :cool: He threatened :eyes::thumbsdown: to turn me in :raising_hand:‍♂️:cop: to the government :sweat::rolling_eyes: so I made him :drooling_face::rat: and the government :poop: go away");
-			msg.channel.sendMessage("I repla:confounded:ced them both :last_quarter_moon_with_face::first_quarter_moon_with_face:as the :smiling_imp: defacto :clown: patriarch :older_man::skin-tone-1: of your family :man:‍:girl:‍:boy:and :astonished: your universe :scream::milky_way::raised_hands: Your mom :racehorse: wouldn’t have :wave: accepted :handshake: me :rolling_eyes: if I came home :house_with_garden: without you :boy::skin-tone-1: and your sister :person_with_blond_hair:‍♀️ so now you know :mortar_board: the real :100: reason :star2: I rescued :helmet_with_cross: you :thumbsup: I JUST :nail_care::skin-tone-2: TOOK OVER :top::dizzy_face: THE FAMILY :man:‍:girl:‍:boy: MORTY :person_frowning::skin-tone-1:‍♂️ And :eyes: if you tell :speaking_head: your mom or sister :woman::skin-tone-2:‍⚕️:information_desk_person: I said any of this :speak_no_evil: I’ll deny it :no_good:‍♂️:triumph: And :smirk: they’ll take my side :two_hearts::relieved::couple: because I’m a :man_dancing: hero :medal::trophy: Morty :joy::rofl: And now :punch: you’re gonna have to do :juggler::skin-tone-1:‍♂️:monkey: whatever I say :stuck_out_tongue_closed_eyes: Morty :disappointed_relieved: Forever :clock1::clock5::clock930::clock10::skull: And I’ll go out :walking::skin-tone-2: and find :telescope: some more :scream_cat: of that :tongue: Mulan :martial_arts_uniform::dolls: Szechuan :dragon::izakaya_lantern:Teriyaki :tired_face::sweat_drops: dipping sauce :fire::ok_hand::pray: Morty :sweat_drops::sweat_drops::sweat_drops::raised_hands:");
-			msg.channel.sendMessage("Because that’s :point_right: what this :tada: is all about Morty :poultry_leg: That’s my :one:  one :point_up:️ arm :selfie: man :man_dancing: I’m not :x: driven :oncoming_automobile: by avenging :fist::skin-tone-1: my dead :skull: family :sob::family_mwg: Morty :droplet: That :rofl: was :hear_no_evil: FAKE :sparkles: I’m :man:‍:microscope: driven :dash: by finding :eyes: that :weary: McNugget :metal: :fries: Sauce :sweat_drops: I want :scream: that :flushed: Mulan :dragon::martial_arts_uniform: McNugget :clown: Sauce :eggplant::sweat_drops:Morty :sob: That’s :muscle::skin-tone-2: my series :clapper: arc :rainbow: Morty :crown: If it takes :heart:️ 9 :heart:️ seasons :heart:️ I WANT :tired_face: MY :clap: MCNUGGET :poultry_leg::fries: DIPPING SAUCE :sweat_drops:SZECHUAN :fire: SAUCE MORTY :rage::dizzy_face: IT’S :drooling_face: GONNA :cartwheel:‍♀️TAKE :rocket: US :ok_woman::skin-tone-1:‍♂️:older_man::skin-tone-1: ALL THE WAY :dizzy: TO :point_right: THE :point_right: END MORTY :checkered_flag: :nine: MORE :moneybag: SEASONS :robot: MORTY :gem: :nine:MORE SEASONS :raised_hands: UNTIL I GET :gift: THAT :heart_eyes: DIPPING :bangbang:️:fire: SZECHUAN :dolls: SAUCE :eggplant::sweat_drops::weary: FOR :nine::seven: MORE YEARS :hourglass:️:clock: MORTY :skull: I :clap: WANT :clap: THAT :clap: MCNUGGET :clap: SAUCE :clap: MORTY");
+			msg.channel.sendMessage("Not so fast Morty :runner::skin-tone-1: you heard your mom :person_with_pouting_face::skin-tone-2: weâ€™ve got adventures :fire: to go on Morty :scream::weary::ok_hand: Just you :facepalm::skin-tone-1:â€â™‚ï¸:gun: and me :man:â€:microscope::gun: and sometimes your sister :information_desk_person::iphone: and sometimes your mom :woman::skin-tone-2:â€âš•ï¸:racehorse: but :bangbang:ï¸ NEVER :raised_hand: your :triumph: dad! :shrug::skin-tone-1:â€â™‚ï¸:x::mask: You wanna :see_no_evil: know why Morty? :speak_no_evil::100: Because he CROSSED me :rage::no_good:â€â™‚ï¸ Oh :dizzy_face: it gets darker Morty :sunglasses::new_moon_with_face: Welcome :alien: to the :sob: darkest :smiling_imp: year of our :man:â€:boy:adventures :pray::tired_face: First 1ï¸âƒ£ thing thatâ€™s :woman:â€:microphone: different :interrobang:ï¸ No more dad Morty :cool: He threatened :eyes::thumbsdown: to turn me in :raising_hand:â€â™‚ï¸:cop: to the government :sweat::rolling_eyes: so I made him :drooling_face::rat: and the government :poop: go away");
+			msg.channel.sendMessage("I repla:confounded:ced them both :last_quarter_moon_with_face::first_quarter_moon_with_face:as the :smiling_imp: defacto :clown: patriarch :older_man::skin-tone-1: of your family :man:â€:girl:â€:boy:and :astonished: your universe :scream::milky_way::raised_hands: Your mom :racehorse: wouldnâ€™t have :wave: accepted :handshake: me :rolling_eyes: if I came home :house_with_garden: without you :boy::skin-tone-1: and your sister :person_with_blond_hair:â€â™€ï¸ so now you know :mortar_board: the real :100: reason :star2: I rescued :helmet_with_cross: you :thumbsup: I JUST :nail_care::skin-tone-2: TOOK OVER :top::dizzy_face: THE FAMILY :man:â€:girl:â€:boy: MORTY :person_frowning::skin-tone-1:â€â™‚ï¸ And :eyes: if you tell :speaking_head: your mom or sister :woman::skin-tone-2:â€âš•ï¸:information_desk_person: I said any of this :speak_no_evil: Iâ€™ll deny it :no_good:â€â™‚ï¸:triumph: And :smirk: theyâ€™ll take my side :two_hearts::relieved::couple: because Iâ€™m a :man_dancing: hero :medal::trophy: Morty :joy::rofl: And now :punch: youâ€™re gonna have to do :juggler::skin-tone-1:â€â™‚ï¸:monkey: whatever I say :stuck_out_tongue_closed_eyes: Morty :disappointed_relieved: Forever :clock1::clock5::clock930::clock10::skull: And Iâ€™ll go out :walking::skin-tone-2: and find :telescope: some more :scream_cat: of that :tongue: Mulan :martial_arts_uniform::dolls: Szechuan :dragon::izakaya_lantern:Teriyaki :tired_face::sweat_drops: dipping sauce :fire::ok_hand::pray: Morty :sweat_drops::sweat_drops::sweat_drops::raised_hands:");
+			msg.channel.sendMessage("Because thatâ€™s :point_right: what this :tada: is all about Morty :poultry_leg: Thatâ€™s my :one:  one :point_up:ï¸ arm :selfie: man :man_dancing: Iâ€™m not :x: driven :oncoming_automobile: by avenging :fist::skin-tone-1: my dead :skull: family :sob::family_mwg: Morty :droplet: That :rofl: was :hear_no_evil: FAKE :sparkles: Iâ€™m :man:â€:microscope: driven :dash: by finding :eyes: that :weary: McNugget :metal: :fries: Sauce :sweat_drops: I want :scream: that :flushed: Mulan :dragon::martial_arts_uniform: McNugget :clown: Sauce :eggplant::sweat_drops:Morty :sob: Thatâ€™s :muscle::skin-tone-2: my series :clapper: arc :rainbow: Morty :crown: If it takes :heart:ï¸ 9 :heart:ï¸ seasons :heart:ï¸ I WANT :tired_face: MY :clap: MCNUGGET :poultry_leg::fries: DIPPING SAUCE :sweat_drops:SZECHUAN :fire: SAUCE MORTY :rage::dizzy_face: ITâ€™S :drooling_face: GONNA :cartwheel:â€â™€ï¸TAKE :rocket: US :ok_woman::skin-tone-1:â€â™‚ï¸:older_man::skin-tone-1: ALL THE WAY :dizzy: TO :point_right: THE :point_right: END MORTY :checkered_flag: :nine: MORE :moneybag: SEASONS :robot: MORTY :gem: :nine:MORE SEASONS :raised_hands: UNTIL I GET :gift: THAT :heart_eyes: DIPPING :bangbang:ï¸:fire: SZECHUAN :dolls: SAUCE :eggplant::sweat_drops::weary: FOR :nine::seven: MORE YEARS :hourglass:ï¸:clock: MORTY :skull: I :clap: WANT :clap: THAT :clap: MCNUGGET :clap: SAUCE :clap: MORTY");
 	}}],
 	["2D",{process:
 		function(bot,msg){
@@ -902,11 +949,11 @@ var commands = new Map([
 			}
 	
 	}}],
-	/*["test",{process:
+	["quoth",{process:
 		function(bot,msg){
-			let quote = bingQuotes[randomIntBtw(0,37)];
+			let quote = Quoths[randomIntBtw(0,49)];
 			msg.channel.sendMessage(quote);
-	}}],*/
+	}}],
 	["CtoF",{process:
 		function(bot,msg){
 			let Ctemp = parseInt(msg.content.slice(1).split(" ").slice(1).join(" "));
@@ -934,9 +981,10 @@ var commands = new Map([
 							sourceLang = config.googleLangs[sourceLang];
 							targetLang = config.googleLangs[targetLang];
 							console.log(sourceLang + " | " + targetLang + " | " + translateTxt);
+							console.log(mods.length);
 							googleTranslate.translate(translateTxt, sourceLang, targetLang, function(err, translation) {
 								console.log(translation);
-								msg.channel.sendMessage(translation.translatedText);
+								msg.channel.sendMessage(translation.getTranslatedText());
 							});
 						}
 					}else{
@@ -960,10 +1008,14 @@ var commands = new Map([
 					}else{
 						targetLang = config.googleLangs[targetLang];
 						console.log(targetLang + "|" + translateTxt);
-						googleTranslate.translate(translateTxt, targetLang, function(err, translation) {
-							console.log(translation);
-							msg.channel.sendMessage(translation.translatedText + "\n (source language: " + getKeyByValue(config.googleLangs, translation.detectedSourceLanguage) + ")");
-						});
+						console.log(mods.length);
+						let translation = googleTranslate.translate(translateTxt, targetLang);
+						//translations = Array.isArray(translations) ? translations : [translations];
+						console.log(translation);
+						//translations.forEach((translation, i) => {
+						//	console.log(`${translateTxt[i]} => (${targetLang}) ${translation}`);
+						// });
+						//msg.channel.sendMessage(translation + "\n (source language: " + getKeyByValue(config.googleLangs, translation.detectedSourceLanguage) + ")");
 					}
 				}else{
 					console.log(targetLang + " not found");
@@ -988,12 +1040,29 @@ var commands = new Map([
 	//**********************************************************************
 	["myMagicItem",{process:
 		function(bot,msg){
-			let players = getJSON('./dnd.json').playerArray;
-			for(let p in players){
-				let player = players[p];
-				if(player.user == msg.author.id){
-					msg.channel.sendMessage(player.item);
+			if(!approvedRole(dndApprovedRoles, msg.author)){
+				let players = getJSON('./dnd.json').playerArray;
+				
+				for(let p in players){
+					let player = players[p];
+					if(player.user == msg.author.id){
+						msg.channel.sendMessage(player.item);
+					}
 				}
+			}else{
+				let dnd = getJSON('./dnd.json');
+				let players = dnd.playerArray;
+				let character = msg.content.slice(1).split(" ").slice(1).join(" ");
+				
+				for(let p in players){
+					let player = players[p];
+					if(player.character.toLowerCase() == character.toLowerCase()){
+						msg.channel.sendMessage(player.item);
+						return;
+					}
+				}
+				msg.channel.sendMessage("Character name not recognized try again");
+				
 			}
 	}}],
 	["findMagicItem",{process:
@@ -1846,7 +1915,7 @@ function bingQuote(){
 		oneTime = false;
 	}
 }
-	
+
 
 //--------------------------EVENTS--------------------------------------------------------------------------------
 bot.on("message", msg => {
@@ -1883,6 +1952,9 @@ bot.on("message", msg => {
 	}
 	if((msg.content.indexOf("#suck-a-dick") > -1) || (msg.content.indexOf("#suck_a_dick") > -1)){
 		msg.reply("I really hope you're not telling me to suck a dick");
+		
+	}else if(msg.content.toLowerCase().replace(/\s+/g, '').indexOf("cunt") > -1){
+		msg.react(dndServer.emojis.get('460290371650584576'));
 	}
 	
 	if((msg.mentions.users.get("128780798399610880")) != null){
@@ -1939,6 +2011,9 @@ bot.on("message", msg => {
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,spam,adminRoles);
 		}else if(cmd == "removequote" || cmd == "kao" || cmd == "editrole"){
 			commands.get(cmdKeys.get(cmd)).process(bot,msg,adminRoles);
+		}else if(cmd == "ze"){
+			commands.get(cmdKeys.get(cmd)).process(bot,msg);
+			msg.channel.sendMessage(spam.txt[txtKeys.get(cmd)]);
 		}else{
 			commands.get(cmdKeys.get(cmd)).process(bot,msg);
 		}
@@ -1961,7 +2036,7 @@ bot.on("message", msg => {
 		let misc = getJSON('./misc.json');
 		if(misc.cbCounter <= 1000){
 			var cleverMessage = msg.content.slice(2);
-			if((cleverMessage.toLowerCase().includes("butthole")) || (cleverMessage.toLowerCase().includes("butt hole"))){
+			if(cleverMessage.toLowerCase().split(" ").join("").includes("butthole")){
 				msg.reply("Dude not cool.");
 			} else {
 				cleverbot.write(cleverMessage, function (response) {
@@ -2000,6 +2075,9 @@ bot.on('guildMemberAdd',member =>{
 	}
 });
 
+bot.on("error", (err) => {
+  console.error(`An error occurred. The error was: ${err}.`)
+});
 
 bot.on('ready', () => {
 	cleverbot = new Cleverbot;
@@ -2062,5 +2140,6 @@ bot.on('ready', () => {
 	//setInterval(function(){ setRainbowRole(thc.roles.find("name","Brighter Ugly Pepe"), thc.members.get("164837968668917760")); }, 1);
 	
 });
+
 //--------------------------END EVENTS----------------------------------------------------------------------------
 bot.login(token);
